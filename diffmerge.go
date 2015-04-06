@@ -105,4 +105,9 @@ func main() {
 	}
 	log.Printf("Loaded %d lines from %s", len(f2.Lines), f2.Name)
 
+	bms := dm.BramCohensPatienceDiff(f1, f2)
+	
+	for n, bm := range bms {
+		fmt.Printf("%d: %v\n", n, bm)
+	}
 }
