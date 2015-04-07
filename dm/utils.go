@@ -2,6 +2,7 @@ package dm
 
 import (
 	"log"
+	"sort"
 )
 
 func minInt(i, j int) int {
@@ -67,26 +68,28 @@ func selectCommonUniqueLines(aLines, bLines []LinePos, counts map[uint32]int) (
 	return selectLines(aLines, fn), selectLines(bLines, fn)
 }
 
-func BlockMatchesToBlockPairs(bms []BlockMatch, aIsPrimary bool, aLineCount, bLineCount int) (
-		pairs []BlockPairs) {
-	
+// BlockMatchByAIndex implements sort.Interface for []BlockMatch based on
+// the AIndex field, then BIndex.
+type BlockMatchByAIndex []BlockMatch
 
-
-/*
-
-// Represents a pairing of ranges in files A and B, primarily for output,
-// as we can produce different pairings based on which file we consider
-// primary (i.e. in the face of block moves we may print A in order, but
-// B out of order).
-type BlockPair struct {
-	AIndex, ALength int
-	BIndex, BLength int
-	IsMatch         bool
-}
-*/
+func (a BlockMatchByAIndex) Len() int           { return len(a) }
+func (a BlockMatchByAIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a BlockMatchByAIndex) Less(i, j int) bool {
+  if a[i].AIndex != a[j].AIndex {
+    return a[i].AIndex < a[j].AIndex
+  }
+  return a[i].BIndex < a[j].BIndex
 }
 
+func SortBlockMatchesByAIndex(a []BlockMatch) {
+  sort.Sort(BlockMatchByAIndex(a))
+}
 
+func SwapBlockMatches(a []BlockMatch) {
+  for n := range a {
+    a[n].AIndex, a[n].BIndex = a[n].BIndex, a[n].AIndex
+  }
+}
 
 
 

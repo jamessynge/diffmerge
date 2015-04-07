@@ -49,4 +49,5 @@ type BlockPair struct {
 	AIndex, ALength int
 	BIndex, BLength int
 	IsMatch         bool
+	IsMove          bool // Does this represent a move?
 }
