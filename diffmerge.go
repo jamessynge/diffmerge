@@ -85,6 +85,20 @@ const APP_VERSION = "0.1"
 // The flag package provides a default help printer via -h switch
 var versionFlag *bool = flag.Bool("v", false, "Print the version number.")
 
+// Ignoring re-ordering for now.
+func printFileDiffs(fileA, fileB *dm.File, bms []dm.BlockMatch) {
+	//	aIndex, bIndex := 0
+	//
+	//	printDiffs
+	//
+	//
+	//
+	//
+	//	for
+	//
+
+}
+
 func main() {
 	flag.Parse() // Scan the arguments list
 
@@ -106,7 +120,7 @@ func main() {
 	log.Printf("Loaded %d lines from %s", len(f2.Lines), f2.Name)
 
 	bms := dm.BramCohensPatienceDiff(f1, f2)
-	
+
 	for n, bm := range bms {
 		fmt.Printf("%d: %v\n", n, bm)
 	}

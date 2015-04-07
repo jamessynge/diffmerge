@@ -1,9 +1,8 @@
 package dm
 
 import (
-"log"
+	"log"
 )
-
 
 func minInt(i, j int) int {
 	if i < j {
@@ -14,7 +13,7 @@ func minInt(i, j int) int {
 }
 
 func findLineWithIndex(lines []LinePos, index int) int {
-	for lo, hi := 0, len(lines) - 1; lo <= hi; {
+	for lo, hi := 0, len(lines)-1; lo <= hi; {
 		mid := (lo + hi) / 2
 		if index < lines[mid].Index {
 			hi = mid - 1
@@ -50,7 +49,7 @@ func countLineOccurrences(lines []LinePos) (counts map[uint32]int) {
 // Which line hashes are unique within their source lines
 // AND common between the two sets of lines.
 func intersectionOfUniqueLines(aCounts, bCounts map[uint32]int) (
-		commonUniqueCounts map[uint32]int) {
+	commonUniqueCounts map[uint32]int) {
 	commonUniqueCounts = make(map[uint32]int)
 	for h, aCount := range aCounts {
 		if aCount == 1 && bCounts[h] == 1 {
@@ -61,10 +60,33 @@ func intersectionOfUniqueLines(aCounts, bCounts map[uint32]int) (
 }
 
 func selectCommonUniqueLines(aLines, bLines []LinePos, counts map[uint32]int) (
-		aUniqueLines, bUniqueLines []LinePos) {
+	aUniqueLines, bUniqueLines []LinePos) {
 	fn := func(lp LinePos) bool {
 		return counts[lp.Hash] == 1
 	}
 	return selectLines(aLines, fn), selectLines(bLines, fn)
 }
+
+func BlockMatchesToBlockPairs(bms []BlockMatch, aIsPrimary bool, aLineCount, bLineCount int) (
+		pairs []BlockPairs) {
+	
+
+
+/*
+
+// Represents a pairing of ranges in files A and B, primarily for output,
+// as we can produce different pairings based on which file we consider
+// primary (i.e. in the face of block moves we may print A in order, but
+// B out of order).
+type BlockPair struct {
+	AIndex, ALength int
+	BIndex, BLength int
+	IsMatch         bool
+}
+*/
+}
+
+
+
+
 

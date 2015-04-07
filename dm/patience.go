@@ -1,7 +1,7 @@
 package dm
 
 import (
-"log"
+	"log"
 )
 
 // Patience Diff, devised by Bram Cohen, focuses on the lines that are unique
@@ -32,23 +32,27 @@ import (
 // 4) Do steps 1-2 on each section between matched lines.
 
 func matchCommonEnds(aLines, bLines []LinePos) (
-		commonEnds []BlockMove, aMiddle, bMiddle []LinePos) {
+	commonEnds []BlockMatch, aMiddle, bMiddle []LinePos) {
 	// Find all lines at the start that are the same (the common prefix).
 	length, limit := 0, minInt(len(aLines), len(bLines))
-	if limit <= 0 { return }
-	for ; length < limit ; length++ {
+	if limit <= 0 {
+		return
+	}
+	for ; length < limit; length++ {
 		if aLines[length].Hash != bLines[length].Hash {
 			break
 		}
 	}
 	if length > 0 {
 		// There is a common prefix.
-		commonEnds = append(commonEnds, BlockMove{
-			AOffset: aLines[0].Index,
-			BOffset: bLines[0].Index,
+		commonEnds = append(commonEnds, BlockMatch{
+			AIndex: aLines[0].Index,
+			BIndex: bLines[0].Index,
 			Length: length,
 		})
-		if length == limit { return }
+		if length == limit {
+			return
+		}
 		aLines = aLines[length:]
 		bLines = bLines[length:]
 		limit -= length
@@ -70,9 +74,9 @@ func matchCommonEnds(aLines, bLines []LinePos) (
 		// There is a common suffix.
 		aOffset++
 		bOffset++
-		commonEnds = append(commonEnds, BlockMove{
-			AOffset: aLines[aOffset].Index,
-			BOffset: bLines[bOffset].Index,
+		commonEnds = append(commonEnds, BlockMatch{
+			AIndex: aLines[aOffset].Index,
+			BIndex: bLines[bOffset].Index,
 			Length: length,
 		})
 		aLines = aLines[:aOffset]
@@ -81,15 +85,14 @@ func matchCommonEnds(aLines, bLines []LinePos) (
 	return commonEnds, aLines, bLines
 }
 
-
 type indicesAndHash struct {
 	aIndex, bIndex int
-	hash uint32
+	hash           uint32
 }
 
 func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
-		aCounts, bCounts map[uint32]int, maxCount int) (
-		aLCSLines, bLCSLines []LinePos) {
+	aCounts, bCounts map[uint32]int, maxCount int) (
+	aLCSLines, bLCSLines []LinePos) {
 	// Determine which lines are equally rare (with fewer than maxCount
 	// occurrences) in the two sequences aLines and bLines.
 	// Decided to require the counts to be the same as this simplifies
@@ -103,7 +106,9 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 			rareLineKeys[h] = true
 		}
 	}
-	if len(rareLineKeys) == 0 { return }
+	if len(rareLineKeys) == 0 {
+		return
+	}
 	selector := func(lp LinePos) bool {
 		return rareLineKeys[lp.Hash]
 	}
@@ -123,7 +128,9 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 	for bIndex := range bRareLines {
 		h := bRareLines[bIndex].Hash
 		aIndices := aRareLineMap[h]
-		if len(aIndices) <= 0 { panic("expected a line in a to match this line in b") }
+		if len(aIndices) <= 0 {
+			panic("expected a line in a to match this line in b")
+		}
 		aIndex := aIndices[0]
 		aRareLineMap[h] = aIndices[1:]
 		ihs = append(ihs, indicesAndHash{aIndex, bIndex, h})
@@ -140,8 +147,8 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 	// values, sorted in the order in which aRareLines entries appear in bRareLines.
 
 	var piles [][]indicesAndHash
-	backPointers := make([][]int, 1)   // Length of previous pile when next pile
-	                                  // is added to
+	backPointers := make([][]int, 1) // Length of previous pile when next pile
+	// is added to
 	for _, ih := range ihs {
 		// Add ihs to the first pile that has a smaller aIndex.
 		addTo := 0
@@ -171,7 +178,7 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 	pileIndex := len(piles) - 1
 	indexInPile := len(piles[pileIndex]) - 1
 	for {
-		lcs[pileIndex] = piles[pileIndex][indexInPile] 
+		lcs[pileIndex] = piles[pileIndex][indexInPile]
 		if pileIndex == 0 {
 			break
 		}
@@ -190,7 +197,7 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 // Compute a longest common subsequence that has enough lines to be
 // trustworthy. We've already trimmed the common prefix and suffix.
 func getLongestCommonSubsequenceOfRareLines(aLines, bLines []LinePos) (
-		aLCSLines, bLCSLines []LinePos) {
+	aLCSLines, bLCSLines []LinePos) {
 	aCounts := countLineOccurrences(aLines)
 	bCounts := countLineOccurrences(bLines)
 
@@ -198,11 +205,11 @@ func getLongestCommonSubsequenceOfRareLines(aLines, bLines []LinePos) (
 	// with unique, but then grows to include more common lines if necessary
 	// until the length of the LCS is at least targetLength (rather arbitrarily
 	// chosen).
-	targetLength := minInt(minInt(len(aLines), len(bLines)) / 16, 10)
+	targetLength := minInt(minInt(len(aLines), len(bLines))/16, 10)
 	lcsLength := 0
 	for maxCount := 1; maxCount <= 5; maxCount++ {
 		aLCSLines, bLCSLines = longestCommonSubsequenceOfRareLines(
-				aLines, bLines, aCounts, bCounts, maxCount)
+			aLines, bLines, aCounts, bCounts, maxCount)
 		lcsLength = len(aLCSLines)
 		// Arbitrary ending critera.
 		if lcsLength >= targetLength {
@@ -215,10 +222,10 @@ func getLongestCommonSubsequenceOfRareLines(aLines, bLines []LinePos) (
 
 // If the lines immediately before those in the block move are identical,
 // then grow the block move by one and repeat.
-func (p *BlockMove) GrowBackwards(aLines, bLines []LinePos) {
+func (p *BlockMatch) GrowBackwards(aLines, bLines []LinePos) {
 	aLimit, bLimit := aLines[0].Index, bLines[0].Index
-	a := findLineWithIndex(aLines, p.AOffset)
-	b := findLineWithIndex(bLines, p.BOffset)
+	a := findLineWithIndex(aLines, p.AIndex)
+	b := findLineWithIndex(bLines, p.BIndex)
 
 	if aLines[a].Hash != bLines[b].Hash {
 		log.Fatalf("Lines %d and %d should have the same hash", a, b)
@@ -233,17 +240,17 @@ func (p *BlockMove) GrowBackwards(aLines, bLines []LinePos) {
 		}
 		growBy++
 	}
-	p.AOffset -= growBy
-	p.BOffset -= growBy
+	p.AIndex -= growBy
+	p.BIndex -= growBy
 	p.Length += growBy
 }
 
 // If the lines immediately after those in the block move are identical,
 // then grow the block move by one and repeat.
-func (p *BlockMove) GrowForwards(aLines, bLines []LinePos) {
-	aLimit, bLimit := aLines[len(aLines) - 1].Index, bLines[len(bLines) - 1].Index
-	a := findLineWithIndex(aLines, p.AOffset + p.Length - 1)
-	b := findLineWithIndex(bLines, p.BOffset + p.Length - 1)
+func (p *BlockMatch) GrowForwards(aLines, bLines []LinePos) {
+	aLimit, bLimit := aLines[len(aLines)-1].Index, bLines[len(bLines)-1].Index
+	a := findLineWithIndex(aLines, p.AIndex+p.Length-1)
+	b := findLineWithIndex(bLines, p.BIndex+p.Length-1)
 
 	if aLines[a].Hash != bLines[b].Hash {
 		log.Fatalf("Lines %d and %d should have the same hash", a, b)
@@ -261,25 +268,25 @@ func (p *BlockMove) GrowForwards(aLines, bLines []LinePos) {
 	p.Length += growBy
 }
 
-func BramCohensPatienceDiff(aFile, bFile *File) []BlockMove {
+func BramCohensPatienceDiff(aFile, bFile *File) []BlockMatch {
 	commonEnds, aMiddle, bMiddle := matchCommonEnds(aFile.Lines, bFile.Lines)
 
 	aLCSLines, bLCSLines := getLongestCommonSubsequenceOfRareLines(
-			aMiddle, bMiddle)
+		aMiddle, bMiddle)
 
-	var middleBlockMoves []BlockMove
+	var middleBlockMoves []BlockMatch
 	for lcsIndex := 0; lcsIndex < len(aLCSLines); {
-		bm := BlockMove{
-			AOffset: aLCSLines[lcsIndex].Index,
-			BOffset: bLCSLines[lcsIndex].Index,
+		bm := BlockMatch{
+			AIndex: aLCSLines[lcsIndex].Index,
+			BIndex: bLCSLines[lcsIndex].Index,
 			Length: 1,
 		}
 		bm.GrowBackwards(aMiddle, bMiddle)
 		bm.GrowForwards(aMiddle, bMiddle)
 		// Has the block grown to consume any of the following LCS entries? If so,
 		// skip past them.
-		beyondA := bm.AOffset + bm.Length
-		beyondB := bm.BOffset + bm.Length
+		beyondA := bm.AIndex + bm.Length
+		beyondB := bm.BIndex + bm.Length
 		lcsIndex++
 		for lcsIndex < len(aLCSLines) {
 			isBeyondA := aLCSLines[lcsIndex].Index >= beyondA
@@ -301,7 +308,7 @@ func BramCohensPatienceDiff(aFile, bFile *File) []BlockMove {
 	}
 
 	if len(commonEnds) == 2 {
-		var result []BlockMove
+		var result []BlockMatch
 		result = append(result, commonEnds[0])
 		result = append(result, middleBlockMoves...)
 		return append(result, commonEnds[1])
@@ -309,7 +316,7 @@ func BramCohensPatienceDiff(aFile, bFile *File) []BlockMove {
 	if len(commonEnds) == 0 {
 		return middleBlockMoves
 	}
-	if commonEnds[0].AOffset == 0 && commonEnds[0].BOffset == 0 {
+	if commonEnds[0].AIndex == 0 && commonEnds[0].BIndex == 0 {
 		return append(commonEnds, middleBlockMoves...)
 	} else {
 		return append(middleBlockMoves, commonEnds[0])

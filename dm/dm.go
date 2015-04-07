@@ -12,6 +12,15 @@ import ()
 type LinePos struct {
 	Start, Length, Index int
 	Hash                 uint32
+	// TODO Add a hash for a "normalized" version of the line, with the thought
+	// that if there is a very large amount of difference between two files, it
+	// maybe due to relatively minor formatting changes (e.g. indentation or
+	// justification) rather than other kinds of changes.
+	// Possible normalizations:
+	// * leading and trailing whitespace removed
+	// * all interior whitespace runs collapsed to a single space
+	//   or maybe completely removed
+	// * convert all letters characters to a single case (very aggressive)
 }
 
 type File struct {
@@ -25,6 +34,19 @@ type File struct {
 	Counts map[uint32]int // Count of hash occurrences in file.
 }
 
-type BlockMove struct {
-	AOffset, BOffset, Length int
+// Represents a match between files A and B.
+type BlockMatch struct {
+	// Index is same as LinePos.Index of starting line of match.
+	// Length is number of lines that match.
+	AIndex, BIndex, Length int
+}
+
+// Represents a pairing of ranges in files A and B, primarily for output,
+// as we can produce different pairings based on which file we consider
+// primary (i.e. in the face of block moves we may print A in order, but
+// B out of order).
+type BlockPair struct {
+	AIndex, ALength int
+	BIndex, BLength int
+	IsMatch         bool
 }

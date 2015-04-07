@@ -1,8 +1,6 @@
 package dm
 
-import (
-
-)
+import ()
 
 // Want a unique id for each unique string. Not sure if it is better to store
 // them (as in here in UniqueStrings), or to just hash them each time they
@@ -12,6 +10,7 @@ type UniqueStrings struct {
 	m map[string]int
 	v []string
 }
+
 func NewUniqueStrings() *UniqueStrings {
 	p := &UniqueStrings{}
 	p.m = make(map[string]int)
@@ -29,5 +28,5 @@ func (p *UniqueStrings) Intern(s string) int {
 	return n
 }
 func (p *UniqueStrings) Get(n int) string {
-	return p.v[n - 1]
+	return p.v[n-1]
 }

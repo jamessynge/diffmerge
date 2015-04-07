@@ -51,17 +51,17 @@ func longestPrefixMatch(aLines, bLines []LinePos, bOffset int) (
 // in b is matched with at most one in a; vice versa is not necessarily true,
 // unless a and b consist only of lines that are locally unique (i.e. no hash
 // appears twice in a, nor twice in b).
-func BasicTichyMaximalBlockMoves(aLines, bLines []LinePos) []BlockMove {
-	var result []BlockMove
+func BasicTichyMaximalBlockMoves(aLines, bLines []LinePos) []BlockMatch {
+	var result []BlockMatch
 	bOffset := 0
 	for bOffset < len(bLines) {
 		aLongestPrefixOffset, prefixLength := longestPrefixMatch(
-				aLines, bLines, bOffset)
+			aLines, bLines, bOffset)
 		if prefixLength > 0 {
-			result = append(result, BlockMove{
-				AOffset: aLongestPrefixOffset,
-				BOffset: bOffset,
-				Length:  prefixLength,
+			result = append(result, BlockMatch{
+				AIndex: aLongestPrefixOffset,
+				BIndex: bOffset,
+				Length: prefixLength,
 			})
 			bOffset += prefixLength
 		} else {
@@ -71,22 +71,8 @@ func BasicTichyMaximalBlockMoves(aLines, bLines []LinePos) []BlockMove {
 	return result
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-	// Find the longest common substring (consecutive lines, block of lines)
-	// between aLines and bLines (which already have their common prefixes and
-	// suffixes removed; I'm sure that is optimal from a performance perspective,
-	// but I'm not sure that it will always produce the longest common substring
-	// of the original aLines and bLines).
-
-
+// Find the longest common substring (consecutive lines, block of lines)
+// between aLines and bLines (which already have their common prefixes and
+// suffixes removed; I'm sure that is optimal from a performance perspective,
+// but I'm not sure that it will always produce the longest common substring
+// of the original aLines and bLines).
