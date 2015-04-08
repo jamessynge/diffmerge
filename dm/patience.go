@@ -103,8 +103,8 @@ func matchCommonEnds(aLines, bLines []LinePos) (
 }
 
 type indicesAndHash struct {
-	aIndex, bIndex int
-	hash           uint32
+	aRareIndex, bRareIndex int
+	hash                   uint32
 }
 
 func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
@@ -137,11 +137,11 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 
 	glog.Infof("longestCommonSubsequenceOfRareLines: %d rare lines from A, %d rare lines from B", len(aRareLines), len(bRareLines))
 
-	// Build an index from hash to aLines entries.
+	// Build an index from hash to aRareLines entries.
 	aRareLineMap := make(map[uint32][]int)
-	for n := range aRareLines {
-		h := aRareLines[n].Hash
-		aRareLineMap[h] = append(aRareLineMap[h], n)
+	for aRareIndex := range aRareLines {
+		h := aRareLines[aRareIndex].Hash
+		aRareLineMap[h] = append(aRareLineMap[h], aRareIndex)
 	}
 
 	glog.Infof("aRareLineMap: %v", aRareLineMap)
@@ -149,15 +149,16 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 	// Build an array that records the hashes of the bLines, and their
 	// corresponding positions in the aLines.
 	var ihs []indicesAndHash
-	for bIndex := range bRareLines {
-		h := bRareLines[bIndex].Hash
-		aIndices := aRareLineMap[h]
-		if len(aIndices) <= 0 {
+	for bRareIndex := range bRareLines {
+		h := bRareLines[bRareIndex].Hash
+		aRareLineIndices := aRareLineMap[h]
+		if len(aRareLineIndices) <= 0 {
 			glog.Fatal("expected a line in a to match this line in b")
 		}
-		aIndex := aIndices[0]
-		aRareLineMap[h] = aIndices[1:]
-		ihs = append(ihs, indicesAndHash{aIndex, bIndex, h})
+		// Pop the first entry off of aRareLineIndices
+		aRareIndex := aRareLineIndices[0]
+		aRareLineMap[h] = aRareLineIndices[1:]
+		ihs = append(ihs, indicesAndHash{aRareIndex, bRareIndex, h})
 	}
 
 	glog.Infof("ihs: %v", ihs)
@@ -170,18 +171,18 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 	// subsequence; note that we don't actually try to determine the full sort,
 	// just the first longest common subsequence.
 	// TODO Can probably just have piles be of type []int, and contain just the
-	// aIndex values.  Similarly, ihses can probably just be an array of aIndex
+	// aRareIndex values.  Similarly, ihses can probably just be an array of aRareIndex
 	// values, sorted in the order in which aRareLines entries appear in bRareLines.
 
 	var piles [][]indicesAndHash
 	backPointers := make([][]int, 1) // Length of previous pile when next pile
 	// is added to
 	for _, ih := range ihs {
-		// Add ihs to the first pile that has a smaller aIndex.
+		// Add ihs to the first pile that has a smaller aRareIndex.
 		addTo := 0
 		for ; addTo < len(piles); addTo++ {
 			topIndex := len(piles[addTo]) - 1
-			if ih.aIndex < piles[addTo][topIndex].aIndex {
+			if ih.aRareIndex < piles[addTo][topIndex].aRareIndex {
 				// We've found a pile we can place it on.
 				break
 			}
@@ -215,12 +216,15 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 		indexInPile = backPointers[pileIndex][indexInPile] - 1
 		pileIndex--
 	}
+	glog.Infof("lcs: %v", lcs)
 
 	// Finally we can construct aLCSLines and bLCSLines
 	for _, ih := range lcs {
-		aLCSLines = append(aLCSLines, aRareLines[ih.aIndex])
-		bLCSLines = append(bLCSLines, bRareLines[ih.bIndex])
+		aLCSLines = append(aLCSLines, aRareLines[ih.aRareIndex])
+		bLCSLines = append(bLCSLines, bRareLines[ih.bRareIndex])
 	}
+	glog.Infof("aLCSLines: %v", aLCSLines)
+	glog.Infof("bLCSLines: %v", bLCSLines)
 	return
 }
 
@@ -253,12 +257,17 @@ func getLongestCommonSubsequenceOfRareLines(aLines, bLines []LinePos) (
 // If the lines immediately before those in the block move are identical,
 // then grow the block move by one and repeat.
 func (p *BlockMatch) GrowBackwards(aLines, bLines []LinePos) {
+	glog.Infof("GrowBackwards: BlockMatch = %v", *p)
+
 	aLimit, bLimit := aLines[0].Index, bLines[0].Index
+	glog.Infof("GrowBackwards aLimit=%d, bLimit=%d", aLimit, bLimit)
+
 	a := findLineWithIndex(aLines, p.AIndex)
 	b := findLineWithIndex(bLines, p.BIndex)
+	glog.Infof("GrowBackwards a=%d, b=%d", a, b)
 
 	if aLines[a].Hash != bLines[b].Hash {
-		glog.Fatalf("Lines %d and %d should have the same hash", a, b)
+		glog.Fatalf("GrowBackwards: Lines %d and %d should have the same hash", a, b)
 	}
 
 	growBy := 0
@@ -270,6 +279,9 @@ func (p *BlockMatch) GrowBackwards(aLines, bLines []LinePos) {
 		}
 		growBy++
 	}
+
+	glog.Infof("GrowBackwards growBy=%d", growBy)
+
 	p.AIndex -= growBy
 	p.BIndex -= growBy
 	p.Length += growBy
@@ -278,12 +290,18 @@ func (p *BlockMatch) GrowBackwards(aLines, bLines []LinePos) {
 // If the lines immediately after those in the block move are identical,
 // then grow the block move by one and repeat.
 func (p *BlockMatch) GrowForwards(aLines, bLines []LinePos) {
-	aLimit, bLimit := aLines[len(aLines)-1].Index, bLines[len(bLines)-1].Index
+	glog.Infof("GrowForwards: BlockMatch = %v", *p)
+
+	aLimit := aLines[len(aLines)-1].Index
+	bLimit := bLines[len(bLines)-1].Index
+	glog.Infof("GrowForwards aLimit=%d, bLimit=%d", aLimit, bLimit)
+
 	a := findLineWithIndex(aLines, p.AIndex+p.Length-1)
 	b := findLineWithIndex(bLines, p.BIndex+p.Length-1)
+	glog.Infof("GrowForwards a=%d, b=%d", a, b)
 
 	if aLines[a].Hash != bLines[b].Hash {
-		glog.Fatalf("Lines %d and %d should have the same hash", a, b)
+		glog.Fatalf("GrowForwards: Lines %d and %d should have the same hash", a, b)
 	}
 
 	growBy := 0
@@ -295,6 +313,9 @@ func (p *BlockMatch) GrowForwards(aLines, bLines []LinePos) {
 		}
 		growBy++
 	}
+
+	glog.Infof("GrowForwards growBy=%d", growBy)
+
 	p.Length += growBy
 }
 
@@ -303,6 +324,9 @@ func BramCohensPatienceDiff(aFile, bFile *File) []BlockMatch {
 
 	aLCSLines, bLCSLines := getLongestCommonSubsequenceOfRareLines(
 		aMiddle, bMiddle)
+
+	glog.Infof("aLCSLines: %v", aLCSLines)
+	glog.Infof("bLCSLines: %v", bLCSLines)
 
 	var middleBlockMoves []BlockMatch
 	for lcsIndex := 0; lcsIndex < len(aLCSLines); {
@@ -315,22 +339,30 @@ func BramCohensPatienceDiff(aFile, bFile *File) []BlockMatch {
 		bm.GrowForwards(aMiddle, bMiddle)
 		// Has the block grown to consume any of the following LCS entries? If so,
 		// skip past them.
+		glog.Infof("Grew BlockMatch to %v", bm)
 		beyondA := bm.AIndex + bm.Length
 		beyondB := bm.BIndex + bm.Length
+
 		lcsIndex++
 		for lcsIndex < len(aLCSLines) {
+			glog.Infof("Following LCS entries: %v   AND   %v", aLCSLines[lcsIndex], bLCSLines[lcsIndex])
+
 			isBeyondA := aLCSLines[lcsIndex].Index >= beyondA
 			isBeyondB := bLCSLines[lcsIndex].Index >= beyondB
+
+			glog.Infof("isBeyondA = %v,   isBeyondB = %v", isBeyondA, isBeyondB)
+
 			if isBeyondA != isBeyondB {
 				glog.Fatalf("Unexpected:\nLCS a: %v\nLCS b: %v\nBlockMove: %v",
 					aLCSLines[lcsIndex], bLCSLines[lcsIndex], bm)
 			}
-			if !isBeyondA {
+			if isBeyondA {
 				// Reached the end of a block of equal pairs of lines before we
 				// got to this next LCS entry.
 				break
 			}
 			// Consume this entry.
+			glog.Infof("Consuming following LCS entries")
 			lcsIndex++
 			continue
 		}
