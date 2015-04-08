@@ -144,7 +144,7 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 		aRareLineMap[h] = append(aRareLineMap[h], n)
 	}
 
-  glog.Infof("aRareLineMap: %v", aRareLineMap)
+	glog.Infof("aRareLineMap: %v", aRareLineMap)
 
 	// Build an array that records the hashes of the bLines, and their
 	// corresponding positions in the aLines.
@@ -160,11 +160,8 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 		ihs = append(ihs, indicesAndHash{aIndex, bIndex, h})
 	}
 
-
-  glog.Infof("ihs: %v", ihs)
-  glog.Infof("aRareLineMap: %v", aRareLineMap)
-
-
+	glog.Infof("ihs: %v", ihs)
+	glog.Infof("aRareLineMap: %v", aRareLineMap)
 
 	// We now know the correspondence in indices between a and b, and thus
 	// have the equally rare lines of a in the same order as they appear in b,
@@ -203,9 +200,9 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 		}
 	}
 
-  glog.Infof("piles: %v", piles)
-  glog.Infof("backPointers: %v", backPointers)
-  
+	glog.Infof("piles: %v", piles)
+	glog.Infof("backPointers: %v", backPointers)
+
 	// The longest common subsequence is of length len(piles).
 	lcs := make([]indicesAndHash, len(piles))
 	pileIndex := len(piles) - 1
