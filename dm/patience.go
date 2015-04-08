@@ -1,7 +1,7 @@
 package dm
 
 import (
-	"log"
+	"github.com/golang/glog"
 )
 
 // Patience Diff, devised by Bram Cohen, focuses on the lines that are unique
@@ -33,13 +33,25 @@ import (
 
 func matchCommonEnds(aLines, bLines []LinePos) (
 	commonEnds []BlockMatch, aMiddle, bMiddle []LinePos) {
+
+	glog.Infof("matchCommonEnds: %d lines from A, %d lines from B", len(aLines), len(bLines))
+
 	// Find all lines at the start that are the same (the common prefix).
 	length, limit := 0, minInt(len(aLines), len(bLines))
 	if limit <= 0 {
 		return
 	}
+
+	glog.Infof("matchCommonEnds: lines [%d, %d) of A", aLines[0].Index, aLines[len(aLines)-1].Index)
+	glog.Infof("matchCommonEnds: lines [%d, %d) of B", bLines[0].Index, bLines[len(bLines)-1].Index)
+
 	for ; length < limit; length++ {
 		if aLines[length].Hash != bLines[length].Hash {
+
+			glog.Infof("matchCommonEnds: common prefix ends at offset %d", length)
+			glog.Infof("matchCommonEnds: A of mismatch: %v", aLines[length])
+			glog.Infof("matchCommonEnds: B of mismatch: %v", bLines[length])
+
 			break
 		}
 	}
@@ -64,6 +76,11 @@ func matchCommonEnds(aLines, bLines []LinePos) (
 	bOffset := len(bLines) - 1
 	for length < limit {
 		if aLines[aOffset].Hash != bLines[bOffset].Hash {
+
+			glog.Infof("matchCommonEnds: common suffix ends at offset %d", length)
+			glog.Infof("matchCommonEnds: A of mismatch: %v", aLines[aOffset])
+			glog.Infof("matchCommonEnds: B of mismatch: %v", bLines[bOffset])
+
 			break
 		}
 		length++
@@ -97,6 +114,9 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 	// occurrences) in the two sequences aLines and bLines.
 	// Decided to require the counts to be the same as this simplifies
 	// the reasoning about the possible matches.
+
+	glog.Infof("longestCommonSubsequenceOfRareLines: %d lines from A, %d lines from B, %d is max count for rare lines", len(aLines), len(bLines), maxCount)
+
 	isRare := func(count int) bool {
 		return 1 <= count && count <= maxCount
 	}
@@ -115,12 +135,16 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 	aRareLines := selectLines(aLines, selector)
 	bRareLines := selectLines(bLines, selector)
 
+	glog.Infof("longestCommonSubsequenceOfRareLines: %d rare lines from A, %d rare lines from B", len(aRareLines), len(bRareLines))
+
 	// Build an index from hash to aLines entries.
 	aRareLineMap := make(map[uint32][]int)
 	for n := range aRareLines {
 		h := aRareLines[n].Hash
 		aRareLineMap[h] = append(aRareLineMap[h], n)
 	}
+
+  glog.Infof("aRareLineMap: %v", aRareLineMap)
 
 	// Build an array that records the hashes of the bLines, and their
 	// corresponding positions in the aLines.
@@ -129,12 +153,18 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 		h := bRareLines[bIndex].Hash
 		aIndices := aRareLineMap[h]
 		if len(aIndices) <= 0 {
-			panic("expected a line in a to match this line in b")
+			glog.Fatal("expected a line in a to match this line in b")
 		}
 		aIndex := aIndices[0]
 		aRareLineMap[h] = aIndices[1:]
 		ihs = append(ihs, indicesAndHash{aIndex, bIndex, h})
 	}
+
+
+  glog.Infof("ihs: %v", ihs)
+  glog.Infof("aRareLineMap: %v", aRareLineMap)
+
+
 
 	// We now know the correspondence in indices between a and b, and thus
 	// have the equally rare lines of a in the same order as they appear in b,
@@ -173,6 +203,9 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 		}
 	}
 
+  glog.Infof("piles: %v", piles)
+  glog.Infof("backPointers: %v", backPointers)
+  
 	// The longest common subsequence is of length len(piles).
 	lcs := make([]indicesAndHash, len(piles))
 	pileIndex := len(piles) - 1
@@ -228,7 +261,7 @@ func (p *BlockMatch) GrowBackwards(aLines, bLines []LinePos) {
 	b := findLineWithIndex(bLines, p.BIndex)
 
 	if aLines[a].Hash != bLines[b].Hash {
-		log.Fatalf("Lines %d and %d should have the same hash", a, b)
+		glog.Fatalf("Lines %d and %d should have the same hash", a, b)
 	}
 
 	growBy := 0
@@ -253,7 +286,7 @@ func (p *BlockMatch) GrowForwards(aLines, bLines []LinePos) {
 	b := findLineWithIndex(bLines, p.BIndex+p.Length-1)
 
 	if aLines[a].Hash != bLines[b].Hash {
-		log.Fatalf("Lines %d and %d should have the same hash", a, b)
+		glog.Fatalf("Lines %d and %d should have the same hash", a, b)
 	}
 
 	growBy := 0
@@ -292,7 +325,7 @@ func BramCohensPatienceDiff(aFile, bFile *File) []BlockMatch {
 			isBeyondA := aLCSLines[lcsIndex].Index >= beyondA
 			isBeyondB := bLCSLines[lcsIndex].Index >= beyondB
 			if isBeyondA != isBeyondB {
-				log.Fatalf("Unexpected:\nLCS a: %v\nLCS b: %v\nBlockMove: %v",
+				glog.Fatalf("Unexpected:\nLCS a: %v\nLCS b: %v\nBlockMove: %v",
 					aLCSLines[lcsIndex], bLCSLines[lcsIndex], bm)
 			}
 			if !isBeyondA {

@@ -5,16 +5,23 @@ import (
 	"hash/fnv"
 	"io"
 	"io/ioutil"
-	"log"
+
+	"github.com/golang/glog"
 )
+
+// TODO Come up with an indentation measure. For example, try to determine
+// where tabs appear, and how many spaces they represent, then record that
+// with each line.
+// TODO Compute a second hash for each line, after normalizing (removing
+// leading and trailing whitespace, etc.).
 
 func ReadFile(name string) (*File, error) {
 	body, err := ioutil.ReadFile(name)
 	if err != nil {
-		log.Printf("Failed to read file %s: %s", name, err)
+		glog.Infof("Failed to read file %s: %s", name, err)
 		return nil, err
 	}
-	log.Printf("Loaded %d bytes from file %s", len(body), name)
+	glog.Infof("Loaded %d bytes from file %s", len(body), name)
 	p := &File{
 		Name:   name,
 		Body:   body,
@@ -68,4 +75,14 @@ func (p *File) UniqueLines() []LinePos {
 		}
 	}
 	return result
+}
+
+func (p *File) GetLineBytes(n int) []byte {
+	if 0 <= n && n < len(p.Lines) {
+		//		glog.Infof("GetLineBytes(%d) found LinePos: %v", n, p.Lines[n])
+		s := p.Lines[n].Start
+		l := p.Lines[n].Length
+		return p.Body[s : s+l]
+	}
+	return nil
 }

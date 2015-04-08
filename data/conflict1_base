@@ -1,0 +1,13 @@
+// Intra-line Conflict:
+//      Base                 |   Yours                |   Theirs
+//      if (y == x + 19) {   |   if (y == x + 17) {   |   if (z == x + 19) {
+//                           |                ^^      |       ^
+// Want to automatically resolve if the edited characters don't appear to overlap.
+
+func F(x, y int) int {
+  if (y == x + 19) {
+    return 7
+  }
+  return 0
+}
+

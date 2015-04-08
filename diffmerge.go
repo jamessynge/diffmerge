@@ -75,15 +75,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
+	"os"
+
+	"github.com/golang/glog"
 
 	"github.com/jamessynge/diffmerge/dm"
 )
-
-const APP_VERSION = "0.1"
-
-// The flag package provides a default help printer via -h switch
-var versionFlag *bool = flag.Bool("v", false, "Print the version number.")
 
 // Ignoring re-ordering for now.
 func printFileDiffs(fileA, fileB *dm.File, bms []dm.BlockMatch) {
@@ -102,26 +99,30 @@ func printFileDiffs(fileA, fileB *dm.File, bms []dm.BlockMatch) {
 func main() {
 	flag.Parse() // Scan the arguments list
 
-	if *versionFlag {
-		log.Println("Version:", APP_VERSION)
-		fmt.Println("Version:", APP_VERSION)
-	}
-
 	f1, err := dm.ReadFile(flag.Arg(0))
 	if err != nil {
-		log.Fatalf("Failed to read file %s: %s", flag.Arg(0), err)
+		glog.Fatalf("Failed to read file %s: %s", flag.Arg(0), err)
 	}
-	log.Printf("Loaded %d lines from %s", len(f1.Lines), f1.Name)
+	glog.Infof("Loaded %d lines from %s", len(f1.Lines), f1.Name)
 
 	f2, err := dm.ReadFile(flag.Arg(1))
 	if err != nil {
-		log.Fatalf("Failed to read file %s: %s", flag.Arg(1), err)
+		glog.Fatalf("Failed to read file %s: %s", flag.Arg(1), err)
 	}
-	log.Printf("Loaded %d lines from %s", len(f2.Lines), f2.Name)
+	glog.Infof("Loaded %d lines from %s", len(f2.Lines), f2.Name)
 
 	bms := dm.BramCohensPatienceDiff(f1, f2)
 
 	for n, bm := range bms {
 		fmt.Printf("%d: %v\n", n, bm)
 	}
+	fmt.Println()
+
+	pairs := dm.BlockMatchesToBlockPairs(bms, true, len(f1.Lines), len(f2.Lines))
+	for n, pair := range pairs {
+		fmt.Printf("%d: %v\n", n, pair)
+	}
+	fmt.Println()
+
+	dm.FormatInterleaved(pairs, true, f1, f2, os.Stdout, true)
 }

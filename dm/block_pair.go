@@ -1,7 +1,10 @@
 package dm
 
 import (
-	"log"
+	"fmt"
+	"io"
+
+	"github.com/golang/glog"
 )
 
 // Confused routine to create the blocks that we'll output, representing
@@ -14,7 +17,7 @@ import (
 func BlockMatchesToBlockPairs(
 	matches []BlockMatch, aIsPrimary bool, aLineCount, bLineCount int) (
 	pairs []BlockPair) {
-	log.Printf("BlockMatchesToBlockPairs")
+	glog.Infof("BlockMatchesToBlockPairs")
 	matchesByA := append([]BlockMatch(nil), matches...)
 	// To simplify the loop below, add a sentinal: an empty match that is at
 	// the end of the file.
@@ -57,7 +60,7 @@ func BlockMatchesToBlockPairs(
 		if aOrder == 0 {
 			return bOrder == 0
 		}
-		return matches2BOrder[matchesByA[aOrder - 1]] == bOrder - 1
+		return matches2BOrder[matchesByA[aOrder-1]] == bOrder-1
 	}
 
 	// March through the BlockMatches
@@ -68,6 +71,7 @@ func BlockMatchesToBlockPairs(
 	// matchesByB).
 
 	loA, loB := 0, 0
+	hasMoves := false
 	for aOrder := range matchesByA {
 		ma := matchesByA[aOrder]
 		bOrder := matches2BOrder[ma]
@@ -80,166 +84,79 @@ func BlockMatchesToBlockPairs(
 				pairs = append(pairs, BlockPair{
 					AIndex:  loA,
 					ALength: aGapLength,
-					BIndex: loB,
+					BIndex:  loB,
 					BLength: bGapLength,
 					IsMatch: false,
-					IsMove: false,  // Not a move relative to its neighbors.
+					IsMove:  false, // Not a move relative to its neighbors.
 				})
 			}
+		} else {
+			hasMoves = true
 		}
 		// Emit a match.
 		pairs = append(pairs, BlockPair{
-			AIndex: ma.AIndex,
+			AIndex:  ma.AIndex,
 			ALength: ma.Length,
-			BIndex: ma.BIndex,
+			BIndex:  ma.BIndex,
 			BLength: ma.Length,
 			IsMatch: true,
-			IsMove: isMove,
+			IsMove:  isMove,
 		})
 		loA, loB = ma.AIndex, ma.BIndex
 	}
 
-	// Sort the BlockPairs by B, and fill the gaps with Inserts (BlockPairs
-	// with no corresponding lines in A).
-	SortBlockPairsByBIndex(pairs)
-	loB = 0
+	// Determine if there are any lines from B missing in the pairs as a result
+	// of treating A as primary.
+	hasGaps := false
+	if hasMoves {
+		SortBlockPairsByBIndex(pairs)
+		loB = 0
 
-
-
-
-		ma, mb := matchesByA[n], matchesByB[n]
-		if ma == mb {
-			// Alignment maintained.
-			// Completely unsure what I want for BIndex in this BlockPair, in
-			// the face of moves. Thought needed.
-			nextB := maxInt(loB, minInt(ma.BIndex, mb.BIndex))
-			if loA < ma.AIndex || loB < nextB {
-				// There is a gap below to be expressed.
-				pairs = append(pairs, BlockPair{
-					AIndex:  loA,
-					ALength: ma.AIndex - loA,
-					BIndex: loB,
-					BLength: nextB - loB,
-					IsMatch: false,
-					IsMove: false,
-				})
-				loA, loB = ma.AIndex, nextB
-			}
-		
-		
-		
-		}
-	
-	
-	
-	}
-	
-
-
-
-
-
-	// Produce BlockPairs indicating a match for each BlockMatch.
-	var pairsA, pairsB []BlockPair
-	matchLinesCount := 0
-	for n := range matches {
-		matchLinesCount += matches[n].Length
-		pairsA = append(pairsA, BlockPair{
-			AIndex:  matches[n].AIndex,
-			ALength: matches[n].Length,
-			BIndex:  matches[n].BIndex,
-			BLength: matches[n].Length,
-			IsMatch: true,
-		})
+		SortBlockPairsByAIndex(pairs)
 	}
 
-	// Reduce complexity by treating A as primary, achieved by swapping if
-	// A is not primary, and then again before returning.
-	if !aIsPrimary {
-		SwapBlockPairs(pairsA)
-		aLineCount, bLineCount = bLineCount, aLineCount
+	if hasGaps {
+		// Sort the BlockPairs by B, and fill the gaps with Inserts (BlockPairs
+		// with no corresponding lines in A).
+		// TODO This is where we may want a heuristic about lines we'd like to keep
+		// together (e.g. if line n is non-empty AND less indented than line n+1,
+		// we commonly expect this to mean that line n+1 is somehow subordinate or
+		// contained in something that started on n; we might also work backwards
+		// on that, for example:
+		//  1:  Lorem ipsum dolor sit amet, consectetur
+		//  2:      adipiscing elit, sed do eiusmod
+		//  3:    tempor incididunt ut labore et dolore magna
+		//  4:  aliqua. Ut enim ad minim veniam, quis nostrud
+		// Here we might infer that 1 is superior to 2 and 3, and that the pairs
+		// 2-3, 3-4, and 1-4 have no such relationship.
+
+		SortBlockPairsByBIndex(pairs)
+		loB = 0
+
+		// TODO Implement gap filling for B
+		// TODO Implement gap filling for A (aligning with B's gaps where possible)
+		// TODO Determine how to mark the moves such that as little is considered
+		// to have moved as possible (i.e. if moved a line from start to end, don't
+		// want to make it appear that it was all the other lines that moved).
+		/*
+			      lowestBIndexAbove := make([]int, len(rawPairs))
+			      lowestBIndexAbove[len(rawPairs)-1] = bLineCount
+			      bLo := bLineCount
+			      outOfOrderMatchCount := 0
+			      outOfOrderLinesCount := 0
+			      for n := len(rawPairs) - 1; n >= 0; n--
+				      lowestBIndexAbove[n] = bLo
+				      if bLo < rawPairs[n].BIndex
+					      outOfOrderMatchCount++
+					      outOfOrderLinesCount += rawPairs[n].BLength
+				      else
+					      bLo = rawPairs[n].BIndex
+
+			      if outOfOrderMatchCount*2 < len(rawPairs) && outOfOrderLinesCount*2 < matchLinesCount
+		*/
+
+		SortBlockPairsByAIndex(pairs)
 	}
-
-	// Use two arrays of pairs, sorted by the two indices.
-	SortBlockPairsByAIndex(pairsA)
-	pairsB := append([]BlockPair(nil), pairsA...)
-
-	// Which pairs represent moves, relative to the primary index? Those where
-	// the secondary index isn't ascending.
-	// TODO Not sure how to handle a huge move (such as first line to last line);
-	// want to consider that a move of a single line, rather than as a move of
-	// all the other lines.
-	lowestBIndexAbove := make([]int, len(rawPairs))
-	lowestBIndexAbove[len(rawPairs)-1] = bLineCount
-	bLo := bLineCount
-	outOfOrderMatchCount := 0
-	outOfOrderLinesCount := 0
-	for n := len(rawPairs) - 1; n >= 0; n-- {
-		lowestBIndexAbove[n] = bLo
-		if bLo < rawPairs[n].BIndex {
-			outOfOrderMatchCount++
-			outOfOrderLinesCount += rawPairs[n].BLength
-		} else {
-			bLo = rawPairs[n].BIndex
-		}
-	}
-
-	if outOfOrderMatchCount*2 < len(rawPairs) && outOfOrderLinesCount*2 < matchLinesCount {
-		//
-
-	}
-
-	/*
-	   for range rawPairs {
-	     i := len(rawPairs) -n
-	     if n == 0 { continue }
-	     if rawPairs[n-1].BIndex > rawPairs[n].BIndex {
-	       rawPairs[n-1].IsMove = true
-	     }
-	   }
-	*/
-
-	for n := range rawPairs {
-		if n == 0 {
-			continue
-		}
-		if rawPairs[n-1].BIndex > rawPairs[n].BIndex {
-			rawPairs[n-1].IsMove = true
-		}
-	}
-
-	// Sort by the primary index and fill any gaps in pairs, w.r.t. the primary index.
-	aLo := 0
-	var aPairs []BlockPair
-	for n := range rawPairs {
-		if rawPairs[n].AIndex > aLo {
-			// There is a gap in the primary key.  Insert a mismatch.
-			// TODO Need a way to find this entry later when dealing with gaps
-			// in the secondary key.
-			aPairs = append(aPairs, BlockPair{
-				AIndex:  aLo,
-				ALength: rawPairs[n].AIndex - aLo,
-				BIndex:  -1,
-				BLength: -1,
-				IsMatch: true,
-			})
-		}
-	}
-
-	// Produce BlockPairs indicating a match for each BlockMatch.
-
-	/*
-
-	   // Represents a pairing of ranges in files A and B, primarily for output,
-	   // as we can produce different pairings based on which file we consider
-	   // primary (i.e. in the face of block moves we may print A in order, but
-	   // B out of order).
-	   type BlockPair struct {
-	   	AIndex, ALength int
-	   	BIndex, BLength int
-	   	IsMatch         bool
-	   }
-	*/
 
 	if !aIsPrimary {
 		SwapBlockPairs(pairs)
@@ -248,3 +165,114 @@ func BlockMatchesToBlockPairs(
 	return
 }
 
+func FormatInterleaved(pairs []BlockPair, aIsPrimary bool, aFile, bFile *File,
+	w io.Writer, printLineNumbers bool) error {
+	pairs = append([]BlockPair(nil), pairs...)
+	if aIsPrimary {
+		SortBlockPairsByAIndex(pairs)
+	} else {
+		SortBlockPairsByBIndex(pairs)
+	}
+	inMove := false
+	for _, bp := range pairs {
+		glog.Infof("FormatInterleaved processing %v", bp)
+		stoppingMove := false
+		startingMove := false
+		if inMove && bp.IsMove {
+			// Reached the end of a move (TODO make sure to update if meaning of
+			// IsMove changes, i.e. I figure out which set of blocks represents the
+			// small move).
+			stoppingMove = false
+		} else if bp.IsMove {
+			startingMove = true
+			inMove = true
+		}
+
+		// Come up with a better visual display.
+		var err error
+		if startingMove {
+			_, err = fmt.Fprintln(w, "Start of move +++++++++++++++++++++++++++++++++")
+		} else if stoppingMove {
+			_, err = fmt.Fprintln(w, "End of move -----------------------------------")
+		}
+		if err != nil {
+			return err
+		}
+
+		printLines := func(f *File, start, length int, prefix rune) error {
+			glog.Infof("printLines [%d, %d) of file %s", start, start+length, f.Name)
+
+			for n := start; n < start+length; n++ {
+				if printLineNumbers { // TODO Compute max width, use to right align.
+					if _, err := fmt.Fprint(w, n, ":\t"); err != nil {
+						return err
+					}
+				}
+				fmt.Fprint(w, prefix, "\t")
+				if _, err := w.Write(f.GetLineBytes(n)); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+
+		formatStartAndLength := func(start, length int) string {
+			if length == 1 {
+				return fmt.Sprintf("%d", start)
+			} else {
+				return fmt.Sprintf("%d,%d", start, length)
+			}
+		}
+
+		if bp.IsMatch {
+			// TODO Maybe print line numbers, especially if in a move?
+			if aIsPrimary {
+				err = printLines(aFile, bp.AIndex, bp.ALength, '=')
+			} else {
+				err = printLines(bFile, bp.BIndex, bp.BLength, '=')
+			}
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		_, err = fmt.Fprint(w, "@@ ", formatStartAndLength(bp.AIndex, bp.ALength),
+			formatStartAndLength(bp.BIndex, bp.BLength), " @@\n")
+		if err != nil {
+			return err
+		}
+		if bp.ALength > 0 {
+			err = printLines(aFile, bp.AIndex, bp.ALength, '-')
+		}
+		if bp.BLength > 0 {
+			err = printLines(aFile, bp.BIndex, bp.BLength, '+')
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func FormatSideBySide(pairs []BlockPair, aIsPrimary bool, aFile, bFile *File,
+	w io.Writer, displayWidth, spacesPerTab int,
+	printLineNumbers, truncateLongLines bool) error {
+	pairs = append([]BlockPair(nil), pairs...)
+	if aIsPrimary {
+		SortBlockPairsByAIndex(pairs)
+	} else {
+		SortBlockPairsByBIndex(pairs)
+	}
+
+	// TODO Calculate how much width we need for line numbers (based on number
+	// of digits required for largest line number, 1-based, so that is number
+	// of lines in the larger file)
+	// TODO Calculate how much width we assign to each file, leaving room for
+	// leading digits (might not be the same if we have an odd number of chars
+	// available).
+	// TODO Consider issue related to multibyte runes.
+
+	return nil
+}
