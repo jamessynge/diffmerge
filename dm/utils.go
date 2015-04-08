@@ -13,6 +13,14 @@ func minInt(i, j int) int {
 	}
 }
 
+func maxInt(i, j int) int {
+	if i < j {
+		return j
+	} else {
+		return i
+	}
+}
+
 func findLineWithIndex(lines []LinePos, index int) int {
 	for lo, hi := 0, len(lines)-1; lo <= hi; {
 		mid := (lo + hi) / 2
@@ -71,7 +79,6 @@ func selectCommonUniqueLines(aLines, bLines []LinePos, counts map[uint32]int) (
 // BlockMatchByAIndex implements sort.Interface for []BlockMatch based on
 // the AIndex field, then BIndex.
 type BlockMatchByAIndex []BlockMatch
-
 func (a BlockMatchByAIndex) Len() int           { return len(a) }
 func (a BlockMatchByAIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a BlockMatchByAIndex) Less(i, j int) bool {
@@ -80,9 +87,55 @@ func (a BlockMatchByAIndex) Less(i, j int) bool {
   }
   return a[i].BIndex < a[j].BIndex
 }
-
 func SortBlockMatchesByAIndex(a []BlockMatch) {
   sort.Sort(BlockMatchByAIndex(a))
+}
+
+// BlockMatchByBIndex implements sort.Interface for []BlockMatch based on
+// the BIndex field, then AIndex.
+type BlockMatchByBIndex []BlockMatch
+func (a BlockMatchByBIndex) Len() int           { return len(a) }
+func (a BlockMatchByBIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a BlockMatchByBIndex) Less(i, j int) bool {
+  if a[i].BIndex != a[j].BIndex {
+    return a[i].BIndex < a[j].BIndex
+  }
+  return a[i].AIndex < a[j].AIndex
+}
+func SortBlockMatchesByBIndex(a []BlockMatch) {
+  sort.Sort(BlockMatchByBIndex(a))
+}
+
+// BlockPairByAIndex implements sort.Interface for []BlockPair based on
+// the AIndex field, then BIndex.
+type BlockPairByAIndex []BlockPair
+
+func (a BlockPairByAIndex) Len() int           { return len(a) }
+func (a BlockPairByAIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a BlockPairByAIndex) Less(i, j int) bool {
+  if a[i].AIndex != a[j].AIndex {
+    return a[i].AIndex < a[j].AIndex
+  }
+  return a[i].BIndex < a[j].BIndex
+}
+func SortBlockPairsByAIndex(a []BlockPair) {
+  sort.Sort(BlockPairByAIndex(a))
+}
+
+// BlockPairByBIndex implements sort.Interface for []BlockPair based on
+// the BIndex field, then AIndex.
+type BlockPairByBIndex []BlockPair
+
+func (a BlockPairByBIndex) Len() int           { return len(a) }
+func (a BlockPairByBIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a BlockPairByBIndex) Less(i, j int) bool {
+  if a[i].BIndex != a[j].BIndex {
+    return a[i].BIndex < a[j].BIndex
+  }
+  return a[i].AIndex < a[j].AIndex
+}
+func SortBlockPairsByBIndex(a []BlockPair) {
+  sort.Sort(BlockPairByBIndex(a))
 }
 
 func SwapBlockMatches(a []BlockMatch) {
@@ -91,5 +144,12 @@ func SwapBlockMatches(a []BlockMatch) {
   }
 }
 
+
+func SwapBlockPairs(a []BlockPair) {
+  for n := range a {
+    a[n].AIndex, a[n].BIndex = a[n].BIndex, a[n].AIndex
+    a[n].ALength, a[n].BLength = a[n].BLength, a[n].ALength
+  }
+}
 
 
