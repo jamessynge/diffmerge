@@ -6,6 +6,11 @@ import (
 
 	"github.com/golang/glog"
 )
+
+// TODO Experiment with how block COPIES are handled; Not sure these are
+// remotely correct yet.
+
+
 /*
 // If the line immediately before those in the block move are the same
 // after normalization, then add those to the block and repeat.
@@ -88,22 +93,10 @@ func (p *BlockPair) GrowForwards(aLines, bLines []LinePos) {
 type matchesToPairsState struct {
 aFile, bFile *File
 aLineCount, bLineCount int
-
 matchesByA, matchesByB []BlockMatch
 hasMoves bool
-
 		unmatchedAs, unmatchedBs map[int]bool
-
-	pairs []BlockPair
-
-
-
-
-
-
-
-
-
+	pairs []*BlockPair
 }
 
 // We assume that A is the primary file.  If not, then caller should take
@@ -129,8 +122,8 @@ func InitMatchesToPairsState(aFile, bFile *File, matches []BlockMatch) *matchesT
 		Length: 1,
 	})
 	p.matchesByA = append(p.matchesByA, BlockMatch{
-		AIndex: aLineCount,
-		BIndex: bLineCount,
+		AIndex: p.aLineCount,
+		BIndex: p.bLineCount,
 		Length: 0,
 	})
 
@@ -141,14 +134,132 @@ func InitMatchesToPairsState(aFile, bFile *File, matches []BlockMatch) *matchesT
 	return p
 }
 
-func (p *matchesToPairsState) fillGap(loA, hiA, loB, hiB) {
-	// Is there a common prefix (identical or normalized)?
-	identical := true
-	limit := intMin(hiA - loA, hiB - loB)
+func markAsIdenticalMatch(pair *BlockPair) {
+  pair.IsMatch = true
+  pair.IsNormalizedMatch = false
+}
+
+func markAsNormalizedMatch(pair *BlockPair) {
+  pair.IsMatch = false
+  pair.IsNormalizedMatch = true
+}
+
+func markAsMismatch(pair *BlockPair) {
+  pair.IsMatch = false
+  pair.IsNormalizedMatch = false
+}
+
+type gapFiller struct {
+converter *matchesToPairsState
+loA, hiA, loB, hiB int
+}
+
+func (g *gapFiller) matchPrefix(equiv func(a, b LinePos) bool, finalizer func(pair *BlockPair)) int {
+  aLines := g.converter.aFile.Lines
+  bLines := g.converter.bFile.Lines
+	limit := minInt(g.hiA - g.loA, g.hiB - g.loB)
 	prefix := 0
 	for ; prefix < limit; prefix++ {
-		lpA := &p.aFile.Lines[loA + prefix]
-		lpB := &p.bFile.Lines[loB + prefix]
+    if !equiv(aLines[g.loA + prefix], bLines[g.loB + prefix]) {
+      break
+    }
+  }
+	if prefix > 0 {
+    pair := &BlockPair{
+			AIndex:  g.loA,
+			ALength: prefix,
+			BIndex:  g.loB,
+			BLength: prefix,
+		}
+		finalizer(pair)
+		g.converter.pairs = append(g.converter.pairs, pair)
+		g.loA += prefix
+		g.loB += prefix
+	}
+  return prefix
+}
+
+func (g *gapFiller) matchSuffix(equiv func(a, b LinePos) bool, finalizer func(pair *BlockPair)) int {
+  aLines := g.converter.aFile.Lines
+  bLines := g.converter.bFile.Lines
+  limit := minInt(g.hiA - g.loA, g.hiB - g.loB)
+	suffix := 1
+	for ; suffix <= limit; suffix++ {
+    if !equiv(aLines[g.hiA - suffix], bLines[g.hiB - suffix]) {
+			break
+		}
+	}
+	suffix--
+	if suffix > 0 {
+    pair := &BlockPair{
+			AIndex:  g.hiA - suffix,
+			ALength: suffix,
+			BIndex:  g.hiB - suffix,
+			BLength: suffix,
+		}
+		finalizer(pair)
+		g.converter.pairs = append(g.converter.pairs, pair)
+		g.hiA -= suffix
+		g.hiB -= suffix
+	}
+	return suffix
+}
+
+type FillPhase int
+const (
+  PhaseByAWithGaps FillPhase = iota
+  PhaseByBWithAGaps
+  PhaseFinal
+)
+
+func exactMatch(a, b LinePos) bool {
+  return a.Hash == b.Hash
+}
+
+func normalizedMatch(a, b LinePos) bool {
+  return a.NormalizedHash == b.NormalizedHash
+}
+
+func (p *matchesToPairsState) fillGap(loA, hiA, loB, hiB int, phase FillPhase) {
+  g := gapFiller{p, loA, hiA, loB, hiB}
+
+  if phase == PhaseByAWithGaps || phase == PhaseByBWithAGaps {
+    // For now allowing normalized. May want to change that
+    // later if I use Tichy's "string comparision with block moves" algorithm
+    // applied to rare lines only, per Cohen's patience diff.
+    g.matchPrefix(exactMatch, markAsIdenticalMatch)
+    g.matchSuffix(exactMatch, markAsIdenticalMatch)
+    g.matchPrefix(normalizedMatch, markAsNormalizedMatch)
+    g.matchSuffix(normalizedMatch, markAsNormalizedMatch)
+  }
+
+  if (phase == PhaseByAWithGaps || phase == PhaseFinal || !p.hasMoves) && (g.hiA > g.loA || g.hiB > g.loB) {
+	  p.pairs = append(p.pairs, &BlockPair{
+		  AIndex:  g.loA,
+		  ALength: g.hiA,
+		  BIndex:  g.loB,
+		  BLength: g.hiB,
+		  IsMatch: false,
+		  IsMove:  false,
+		  IsNormalizedMatch: false,
+	  })
+  }
+}
+
+
+
+/*
+
+
+
+f fillState) fillState {
+	// Is there a common prefix (identical or normalized)?
+	identical := true
+	limit := intMin(f.hiA - f.loA, f.hiB - f.loB)
+	prefix := 0
+	for ; prefix < limit; prefix++ {
+		lpA := &p.aFile.Lines[f.loA + prefix]
+		lpB := &p.bFile.Lines[f.loB + prefix]
 		if lpA.Hash != lpB.Hash {
 			if lpA.NormalizedHash != lpB.NormalizedHash {
 				break
@@ -160,9 +271,9 @@ func (p *matchesToPairsState) fillGap(loA, hiA, loB, hiB) {
 	}
 	if prefix > 0 {
 		p.pairs = append(p.pairs, BlockPair{
-			AIndex:  loA,
+			AIndex:  f.loA,
 			ALength: prefix,
-			BIndex:  loB,
+			BIndex:  f.loB,
 			BLength: prefix,
 			IsMatch: identical,
 			IsMove:  false,
@@ -171,8 +282,8 @@ func (p *matchesToPairsState) fillGap(loA, hiA, loB, hiB) {
 		if prefix >= limit {
 			return
 		}
-		loA += prefix
-		loB += prefix
+		f.loA += prefix
+		f.loB += prefix
 		limit -= prefix
 	}
 
@@ -180,8 +291,8 @@ func (p *matchesToPairsState) fillGap(loA, hiA, loB, hiB) {
 	suffix := 1
 	identical = true
 	for ; suffix <= limit; suffix++ {
-		lpA := &p.aFile.Lines[hiA - suffix]
-		lpB := &p.bFile.Lines[hiB - suffix]
+		lpA := &p.aFile.Lines[f.hiA - suffix]
+		lpB := &p.bFile.Lines[f.hiB - suffix]
 		if lpA.Hash != lpB.Hash {
 			if lpA.NormalizedHash != lpB.NormalizedHash {
 				break
@@ -194,28 +305,31 @@ func (p *matchesToPairsState) fillGap(loA, hiA, loB, hiB) {
 	if suffix > 1 {
 		suffix--
 		p.pairs = append(p.pairs, BlockPair{
-			AIndex:  hiA - suffix,
+			AIndex:  f.hiA - suffix,
 			ALength: suffix,
-			BIndex:  hiB - suffix,
+			BIndex:  f.hiB - suffix,
 			BLength: suffix,
 			IsMatch: identical,
 			IsMove:  false,
 			IsNormalizedMatch: !identical,
 		})
-		hiA -= suffix
-		hiB -= suffix
+		f.hiA -= suffix
+		f.hiB -= suffix
 	}
 	
 	p.pairs = append(p.pairs, BlockPair{
-		AIndex:  loA,
-		ALength: hiA,
-		BIndex:  loB,
-		BLength: hiB,
+		AIndex:  f.loA,
+		ALength: f.hiA,
+		BIndex:  f.loB,
+		BLength: f.hiB,
 		IsMatch: false,
 		IsMove:  false,
 		IsNormalizedMatch: false,
 	})
 }
+
+*/
+
 
 func (p *matchesToPairsState) createPairsByA() {
 	// Create an index from BlockMatch to position in matchesByB, allowing
@@ -249,7 +363,7 @@ func (p *matchesToPairsState) createPairsByA() {
 			isMove = false
 			// No gaps to fill for sentinal at start
 			if ma.AIndex >= 0 {
-				p.fillGap(loA, ma.AIndex, loB, ma.BIndex)
+				p.fillGap(loA, ma.AIndex, loB, ma.BIndex, PhaseByAWithGaps)
 			}
 		} else {
 			p.hasMoves = true
@@ -257,8 +371,8 @@ func (p *matchesToPairsState) createPairsByA() {
 				p.unmatchedAs[n] = true
 			}
 		}
-		// Emit a match.
-		pairs = append(pairs, BlockPair{
+		// Emit an exact match.
+		p.pairs = append(p.pairs, &BlockPair{
 			AIndex:  ma.AIndex,
 			ALength: ma.Length,
 			BIndex:  ma.BIndex,
@@ -278,38 +392,47 @@ func (p *matchesToPairsState) fillGapsByB() {
 	SortBlockPairsByBIndex(p.pairs)
 
 	// Find any gaps in B, attempt to fill them.
-	loB = 0
-	for n, numPairs := 0, len(p.pairs); n < numPairs; n++ {
-		pair := &p.pairs[n]
+	for n, numPairs, loB := 0, len(p.pairs), 0; n < numPairs; n++ {
+		pair := p.pairs[n]
 		if loB < pair.BIndex {
 			// There is a gap. Find the lines in A just before this pair
 			// that are also unmatched.
 			hiA := pair.AIndex
 			loA := hiA - 1
-			for ; loA >= 0 && p.unmatchedAs[loA]; loAa-- {
+			for ; loA >= 0 && p.unmatchedAs[loA]; loA-- {
 				delete(p.unmatchedAs, loA)
 			}
 			loA++
 			// TODO Consider skipping the common suffix matching here.
-			p.fillGap(loA, hiA, loB, pair.BIndex)
+			p.fillGap(loA, hiA, loB, pair.BIndex, PhaseByBWithAGaps)
 		}
 		loB = pair.BIndex + pair.BLength
 	}
 }
 
-func (p *matchesToPairsState) fillGapsByA() {
+func (p *matchesToPairsState) fillFinal() {
 	if len(p.unmatchedAs) == 0 {
 		return
 	}
+	// Find any gaps remaining in A and fill them. Depending upon presence
+	// of sentinals here.
+	SortBlockPairsByAIndex(p.pairs)
+	loA := 0
+	for n, numPairs := 1, len(p.pairs); n < numPairs; n++ {
+	  pair := p.pairs[n]
+	  if loA < pair.AIndex {
+		  p.pairs = append(p.pairs, &BlockPair{
+			  AIndex:  loA,
+			  ALength: pair.AIndex - loA,
+			  BIndex:  pair.BIndex,
+			  BLength: 0,
+		  })
+	  }
+	  loA = maxInt(loA, pair.AIndex + pair.ALength)
+  }
 
-
-
-
-
-
-
-
-
+	SortBlockPairsByBIndex(p.pairs)
+}
 
 // Confused routine to create the blocks that we'll output, representing
 // matches between files, inserted lines, dropped lines, and conflicts.
@@ -317,8 +440,30 @@ func (p *matchesToPairsState) fillGapsByA() {
 // I may have lines from one file appearing twice. To simplify things I'm
 // treating one file as primary, where its lines will appear in the output
 // exactly once and in order, and the other will be secondary, and its lines
+// will appear out of order IFF there have been moves. Note that copies may
+// cause the primary lines to appear twice in the other file, which will
+// be treated as an insertion rather than a copy (at least so far).
+func BlockMatchesToBlockPairs(aFile, bFile *File, matches []BlockMatch) (
+    pairs []*BlockPair) {
+  p := InitMatchesToPairsState(aFile, bFile, matches)
+  p.createPairsByA()
+  if p.hasMoves {
+    p.fillGapsByB()
+    p.fillFinal()
+  }
+  p.combinePairs()
+  return p.pairs
+}
+
+/*
+// Confused routine to create the blocks that we'll output, representing
+// matches between files, inserted lines, dropped lines, and conflicts.
+// Because I want to support block moves (and by extension block copies),
+// I may have lines from one file appearing twice. To simplify things I'm
+// treating one file as primary, where its lines will appear in the output
+// exactly once and in order, and the other will be secondary, and its lines
 // will appear out of order IFF there have been moves.
-func BlockMatchesToBlockPairs(
+func BlockMatchesToBlockPairsOLD(
 	matches []BlockMatch, aIsPrimary bool, aLineCount, bLineCount int) (
 	pairs []BlockPair) {
 	glog.Infof("BlockMatchesToBlockPairs")
@@ -483,7 +628,7 @@ func BlockMatchesToBlockPairs(
 			      if outOfOrderMatchCount*2 < len(rawPairs) && outOfOrderLinesCount*2 < matchLinesCount
 		*/
 
-
+/*
 
 
 
@@ -529,7 +674,7 @@ func BlockMatchesToBlockPairs(
 					      bLo = rawPairs[n].BIndex
 
 			      if outOfOrderMatchCount*2 < len(rawPairs) && outOfOrderLinesCount*2 < matchLinesCount
-		*/
+	
 
 		SortBlockPairsByAIndex(pairs)
 	}
@@ -541,9 +686,11 @@ func BlockMatchesToBlockPairs(
 	return
 }
 
-func FormatInterleaved(pairs []BlockPair, aIsPrimary bool, aFile, bFile *File,
+*/
+
+func FormatInterleaved(pairs []*BlockPair, aIsPrimary bool, aFile, bFile *File,
 	w io.Writer, printLineNumbers bool) error {
-	pairs = append([]BlockPair(nil), pairs...)
+	pairs = append([]*BlockPair(nil), pairs...)
 	if aIsPrimary {
 		SortBlockPairsByAIndex(pairs)
 	} else {
@@ -637,10 +784,10 @@ func FormatInterleaved(pairs []BlockPair, aIsPrimary bool, aFile, bFile *File,
 	return nil
 }
 
-func FormatSideBySide(pairs []BlockPair, aIsPrimary bool, aFile, bFile *File,
+func FormatSideBySide(pairs []*BlockPair, aIsPrimary bool, aFile, bFile *File,
 	w io.Writer, displayWidth, spacesPerTab int,
 	printLineNumbers, truncateLongLines bool) error {
-	pairs = append([]BlockPair(nil), pairs...)
+	pairs = append([]*BlockPair(nil), pairs...)
 	if aIsPrimary {
 		SortBlockPairsByAIndex(pairs)
 	} else {

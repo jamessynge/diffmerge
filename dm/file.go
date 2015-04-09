@@ -21,6 +21,7 @@ func normalizeLine(line []byte) []byte {
 	// spaces, maybe normalize case.
 	return line
 }
+
 /*
    527	func indexFunc(s []byte, f func(r rune) bool, truth bool) int {
    528		start := 0
@@ -37,7 +38,7 @@ func normalizeLine(line []byte) []byte {
    539		}
    540		return -1
    541	}
-   542	
+   542
    543	// lastIndexFunc is the same as LastIndexFunc except that if
    544	// truth==false, the sense of the predicate function is
    545	// inverted.
@@ -54,11 +55,8 @@ func normalizeLine(line []byte) []byte {
    556		}
    557		return -1
    558	}
-   559	
+   559
 */
-
-
-
 
 func ReadFile(name string) (*File, error) {
 	body, err := ioutil.ReadFile(name)
@@ -94,12 +92,12 @@ func ReadFile(name string) (*File, error) {
 				}
 				normalizedHash = hasher.Sum32()
 			}
-			
+
 			p.Lines = append(p.Lines, LinePos{
-				Start:  pos,
-				Length: length,
-				Index:  index,
-				Hash:   hash,
+				Start:          pos,
+				Length:         length,
+				Index:          index,
+				Hash:           hash,
 				NormalizedHash: normalizedHash,
 			})
 			p.Counts[hash]++

@@ -48,9 +48,9 @@ type BlockMatch struct {
 // primary (i.e. in the face of block moves we may print A in order, but
 // B out of order).
 type BlockPair struct {
-	AIndex, ALength int
-	BIndex, BLength int
-	IsMatch         bool
+	AIndex, ALength   int
+	BIndex, BLength   int
+	IsMatch           bool
 	IsNormalizedMatch bool
-	IsMove          bool // Does this represent a move?
+	IsMove            bool // Does this represent a move?
 }

@@ -112,7 +112,7 @@ func SortBlockMatchesByBIndex(a []BlockMatch) {
 
 // BlockPairByAIndex implements sort.Interface for []BlockPair based on
 // the AIndex field, then BIndex.
-type BlockPairByAIndex []BlockPair
+type BlockPairByAIndex []*BlockPair
 
 func (a BlockPairByAIndex) Len() int      { return len(a) }
 func (a BlockPairByAIndex) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
@@ -128,13 +128,13 @@ func (a BlockPairByAIndex) Less(i, j int) bool {
 	}
 	return a[i].BIndex < a[j].BIndex
 }
-func SortBlockPairsByAIndex(a []BlockPair) {
+func SortBlockPairsByAIndex(a []*BlockPair) {
 	sort.Sort(BlockPairByAIndex(a))
 }
 
 // BlockPairByBIndex implements sort.Interface for []BlockPair based on
 // the BIndex field, then AIndex.
-type BlockPairByBIndex []BlockPair
+type BlockPairByBIndex []*BlockPair
 
 func (a BlockPairByBIndex) Len() int      { return len(a) }
 func (a BlockPairByBIndex) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
@@ -150,7 +150,7 @@ func (a BlockPairByBIndex) Less(i, j int) bool {
 	}
 	return a[i].ALength < a[j].ALength
 }
-func SortBlockPairsByBIndex(a []BlockPair) {
+func SortBlockPairsByBIndex(a []*BlockPair) {
 	sort.Sort(BlockPairByBIndex(a))
 }
 
@@ -160,7 +160,7 @@ func SwapBlockMatches(a []BlockMatch) {
 	}
 }
 
-func SwapBlockPairs(a []BlockPair) {
+func SwapBlockPairs(a []*BlockPair) {
 	for n := range a {
 		a[n].AIndex, a[n].BIndex = a[n].BIndex, a[n].AIndex
 		a[n].ALength, a[n].BLength = a[n].BLength, a[n].ALength
