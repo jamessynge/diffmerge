@@ -7,9 +7,18 @@ import (
 	"github.com/golang/glog"
 )
 
+// Define BlockMatches U and V in matches to be "adjacent matches"
+// when there exist integers i and j such that:
+//      matchesByA[i] == U      matchesByA[i + 1] == V
+//      matchesByB[j] == U      matchesByB[j + 1] == V
+// We want to identify such adjacent matches because we can then be
+// confident in emiting a conflict, insertion or deletion between
+// two, rather than there being a likelihood that the gap between the
+// two represents a move.
+
+
 // TODO Experiment with how block COPIES are handled; Not sure these are
 // remotely correct yet.
-
 
 /*
 // If the line immediately before those in the block move are the same
@@ -79,15 +88,6 @@ func (p *BlockPair) GrowForwards(aLines, bLines []LinePos) {
 }
 */
 
-
-// Define BlockMatches U and V in matches to be "adjacent matches"
-// when there exist integers i and j such that:
-//      matchesByA[i] == U      matchesByA[i + 1] == V
-//      matchesByB[j] == U      matchesByB[j + 1] == V
-// We want to identify such adjacent matches because we can then be
-// confident in emiting a conflict, insertion or deletion between
-// two, rather than there being a likelihood that the gap between the
-// two represents a move.
 
 
 type matchesToPairsState struct {
@@ -172,6 +172,7 @@ func (g *gapFiller) matchPrefix(equiv func(a, b LinePos) bool, finalizer func(pa
 			BLength: prefix,
 		}
 		finalizer(pair)
+		glog.Infof("matchPrefix found: %v", *pair)
 		g.converter.pairs = append(g.converter.pairs, pair)
 		g.loA += prefix
 		g.loB += prefix
@@ -198,6 +199,7 @@ func (g *gapFiller) matchSuffix(equiv func(a, b LinePos) bool, finalizer func(pa
 			BLength: suffix,
 		}
 		finalizer(pair)
+		glog.Infof("matchSuffix found: %v", *pair)
 		g.converter.pairs = append(g.converter.pairs, pair)
 		g.hiA -= suffix
 		g.hiB -= suffix
@@ -221,6 +223,8 @@ func normalizedMatch(a, b LinePos) bool {
 }
 
 func (p *matchesToPairsState) fillGap(loA, hiA, loB, hiB int, phase FillPhase) {
+  glog.Infof("fillGap %d->%d,  %d->%d,   %v", loA, hiA, loB, hiB, phase)
+
   g := gapFiller{p, loA, hiA, loB, hiB}
 
   if phase == PhaseByAWithGaps || phase == PhaseByBWithAGaps {
@@ -234,102 +238,19 @@ func (p *matchesToPairsState) fillGap(loA, hiA, loB, hiB int, phase FillPhase) {
   }
 
   if (phase == PhaseByAWithGaps || phase == PhaseFinal || !p.hasMoves) && (g.hiA > g.loA || g.hiB > g.loB) {
-	  p.pairs = append(p.pairs, &BlockPair{
+    pair := &BlockPair{
 		  AIndex:  g.loA,
-		  ALength: g.hiA,
+		  ALength: g.hiA - g.loA,
 		  BIndex:  g.loB,
-		  BLength: g.hiB,
+		  BLength: g.hiB - g.loB,
 		  IsMatch: false,
 		  IsMove:  false,
 		  IsNormalizedMatch: false,
-	  })
+	  }
+		glog.Infof("fillGap inserting: %v", *pair)
+	  p.pairs = append(p.pairs, pair)
   }
 }
-
-
-
-/*
-
-
-
-f fillState) fillState {
-	// Is there a common prefix (identical or normalized)?
-	identical := true
-	limit := intMin(f.hiA - f.loA, f.hiB - f.loB)
-	prefix := 0
-	for ; prefix < limit; prefix++ {
-		lpA := &p.aFile.Lines[f.loA + prefix]
-		lpB := &p.bFile.Lines[f.loB + prefix]
-		if lpA.Hash != lpB.Hash {
-			if lpA.NormalizedHash != lpB.NormalizedHash {
-				break
-			}
-			// TODO If prefix > 0 && identical, emit a common prefix that represents
-			// an identical match, then continue with the normalized match.
-			identical = false
-		}
-	}
-	if prefix > 0 {
-		p.pairs = append(p.pairs, BlockPair{
-			AIndex:  f.loA,
-			ALength: prefix,
-			BIndex:  f.loB,
-			BLength: prefix,
-			IsMatch: identical,
-			IsMove:  false,
-			IsNormalizedMatch: !identical,
-		})
-		if prefix >= limit {
-			return
-		}
-		f.loA += prefix
-		f.loB += prefix
-		limit -= prefix
-	}
-
-	// Is there a common suffix (identical or normalized)?
-	suffix := 1
-	identical = true
-	for ; suffix <= limit; suffix++ {
-		lpA := &p.aFile.Lines[f.hiA - suffix]
-		lpB := &p.bFile.Lines[f.hiB - suffix]
-		if lpA.Hash != lpB.Hash {
-			if lpA.NormalizedHash != lpB.NormalizedHash {
-				break
-			}
-			// TODO If suffix > 1 && identical, emit a common suffix that represents
-			// an identical match, then continue with the normalized match.
-			identical = false
-		}
-	}
-	if suffix > 1 {
-		suffix--
-		p.pairs = append(p.pairs, BlockPair{
-			AIndex:  f.hiA - suffix,
-			ALength: suffix,
-			BIndex:  f.hiB - suffix,
-			BLength: suffix,
-			IsMatch: identical,
-			IsMove:  false,
-			IsNormalizedMatch: !identical,
-		})
-		f.hiA -= suffix
-		f.hiB -= suffix
-	}
-	
-	p.pairs = append(p.pairs, BlockPair{
-		AIndex:  f.loA,
-		ALength: f.hiA,
-		BIndex:  f.loB,
-		BLength: f.hiB,
-		IsMatch: false,
-		IsMove:  false,
-		IsNormalizedMatch: false,
-	})
-}
-
-*/
-
 
 func (p *matchesToPairsState) createPairsByA() {
 	// Create an index from BlockMatch to position in matchesByB, allowing
@@ -372,24 +293,23 @@ func (p *matchesToPairsState) createPairsByA() {
 			}
 		}
 		// Emit an exact match.
-		p.pairs = append(p.pairs, &BlockPair{
+		pair := &BlockPair{
 			AIndex:  ma.AIndex,
 			ALength: ma.Length,
 			BIndex:  ma.BIndex,
 			BLength: ma.Length,
 			IsMatch: true,
 			IsMove:  isMove,
-		})
+		}
+		glog.Infof("createPairsByA inserting: %v", *pair)
+		p.pairs = append(p.pairs, pair)
+		loA, loB = ma.AIndex + ma.Length, ma.BIndex + ma.Length
 	}
 }
 
 func (p *matchesToPairsState) fillGapsByB() {
-	if p.hasMoves {
-		// There shouldn't be any gaps in B if there have been no moves.
-		return
-	}
-
 	SortBlockPairsByBIndex(p.pairs)
+  p.combinePairs()
 
 	// Find any gaps in B, attempt to fill them.
 	for n, numPairs, loB := 0, len(p.pairs), 0; n < numPairs; n++ {
@@ -411,12 +331,10 @@ func (p *matchesToPairsState) fillGapsByB() {
 }
 
 func (p *matchesToPairsState) fillFinal() {
-	if len(p.unmatchedAs) == 0 {
-		return
-	}
 	// Find any gaps remaining in A and fill them. Depending upon presence
 	// of sentinals here.
 	SortBlockPairsByAIndex(p.pairs)
+  p.combinePairs()
 	loA := 0
 	for n, numPairs := 1, len(p.pairs); n < numPairs; n++ {
 	  pair := p.pairs[n]
@@ -427,11 +345,64 @@ func (p *matchesToPairsState) fillFinal() {
 			  BIndex:  pair.BIndex,
 			  BLength: 0,
 		  })
+      glog.Infof("fillFinal added missing A lines: %v",
+          *p.pairs[len(p.pairs) - 1])
 	  }
 	  loA = maxInt(loA, pair.AIndex + pair.ALength)
   }
 
 	SortBlockPairsByBIndex(p.pairs)
+  p.combinePairs()
+	loB := 0
+	for n, numPairs := 1, len(p.pairs); n < numPairs; n++ {
+	  pair := p.pairs[n]
+	  if loB < pair.BIndex {
+		  p.pairs = append(p.pairs, &BlockPair{
+			  AIndex:  pair.AIndex,
+			  ALength: 0,
+			  BIndex:  loB,
+			  BLength: pair.BIndex - loB,
+		  })
+      glog.Infof("fillFinal added missing B lines: %v",
+          *p.pairs[len(p.pairs) - 1])
+	  }
+	  loB = maxInt(loB, pair.BIndex + pair.BLength)
+  }
+}
+
+func BlockPairsAreSameType(p, o *BlockPair) bool {
+  return p.IsMatch == o.IsMatch && p.IsNormalizedMatch == o.IsNormalizedMatch
+}
+
+func BlockPairsAreInOrder(p, o *BlockPair) bool {
+  nextA := p.AIndex + p.ALength
+  nextB := p.BIndex + p.BLength
+  return nextA == o.AIndex && nextB == o.BIndex
+}
+
+func IsSentinal(p *BlockPair) bool {
+  return p.AIndex < 0 || (p.ALength == 0 && p.BLength == 0)
+}
+
+// Sort by AIndex or BIndex before calling combinePairs.
+func (p *matchesToPairsState) combinePairs() {
+  // For each pair of consecutive BlockPairs, if they can be combined,
+  // combine them into the first of them.
+  u, v, limit := 0, 1, len(p.pairs)
+  for v < limit {
+    j, k := p.pairs[u], p.pairs[v]
+    if BlockPairsAreSameType(j, k) && BlockPairsAreInOrder(j, k) && !IsSentinal(j) && !IsSentinal(k) {
+      glog.Infof("Combining BlockPairs:\n[%d]: %v\n[%d]: %v", u, *j, v, *k)
+      j.ALength += k.ALength
+      j.BLength += k.BLength
+      p.pairs[v] = nil
+    } else {
+      u++
+    }
+    v++
+  }
+  glog.Infof("Removed %d BlockPairs", v - u - 1)
+  p.pairs = p.pairs[0:u+1]
 }
 
 // Confused routine to create the blocks that we'll output, representing
@@ -448,245 +419,16 @@ func BlockMatchesToBlockPairs(aFile, bFile *File, matches []BlockMatch) (
   p := InitMatchesToPairsState(aFile, bFile, matches)
   p.createPairsByA()
   if p.hasMoves {
+    glog.Infof("Filling gaps left by moves")
     p.fillGapsByB()
     p.fillFinal()
+  } else {
+    glog.Infof("Found no moves")
   }
+	SortBlockPairsByAIndex(p.pairs)
   p.combinePairs()
-  return p.pairs
+  return p.pairs[1:len(p.pairs) - 1]  // Remove sentinals
 }
-
-/*
-// Confused routine to create the blocks that we'll output, representing
-// matches between files, inserted lines, dropped lines, and conflicts.
-// Because I want to support block moves (and by extension block copies),
-// I may have lines from one file appearing twice. To simplify things I'm
-// treating one file as primary, where its lines will appear in the output
-// exactly once and in order, and the other will be secondary, and its lines
-// will appear out of order IFF there have been moves.
-func BlockMatchesToBlockPairsOLD(
-	matches []BlockMatch, aIsPrimary bool, aLineCount, bLineCount int) (
-	pairs []BlockPair) {
-	glog.Infof("BlockMatchesToBlockPairs")
-	matchesByA := append([]BlockMatch(nil), matches...)
-	// To simplify the loop below, add a sentinal: an empty match that is at
-	// the end of the file.
-	// TODO Determine if the sentinal helps.
-	// TODO Determine if adding another sentinal to match the start
-	// (i.e. BlockMatch{-1, -1, 0}) would help as well.
-	matchesByA = append(matchesByA, BlockMatch{
-		AIndex: aLineCount,
-		BIndex: bLineCount,
-		Length: 0,
-	})
-
-	// Reduce complexity by treating A as primary, achieved by swapping if
-	// A is not primary, and swapping again before returning.
-	if !aIsPrimary {
-		SwapBlockMatches(matchesByA)
-		aLineCount, bLineCount = bLineCount, aLineCount
-	}
-	SortBlockMatchesByAIndex(matchesByA)
-	matchesByB := append([]BlockMatch(nil), matchesByA...)
-	SortBlockMatchesByBIndex(matchesByB)
-
-	// Create an index from BlockMatch to position in matchesByB, allowing
-	// us to detect adjacency in B when processing matchesByA.
-	matches2BOrder := make(map[BlockMatch]int)
-	for n := range matchesByB {
-		matches2BOrder[matchesByB[n]] = n
-	}
-
-	isAdjacentToPredecessor := func(aOrder, bOrder int) bool {
-		if aOrder == 0 {
-			return bOrder == 0
-		}
-		return matches2BOrder[matchesByA[aOrder-1]] == bOrder-1
-	}
-
-	// March through the BlockMatches
-	// creating BlockPairs representing matches, moves, and mismatches
-	// (insertions, deletions and conflicts).
-	// We don't emit a non-match when a move is encountered (i.e. between
-	// two sequential matches in matchesByA that are not sequential in
-	// matchesByB).
-
-	loA, loB := 0, 0
-	hasMoves := false
-	for aOrder := range matchesByA {
-		ma := matchesByA[aOrder]
-		bOrder := matches2BOrder[ma]
-		isMove := true
-		if isAdjacentToPredecessor(aOrder, bOrder) {
-			isMove = false
-			aGapLength := ma.AIndex - loA
-			bGapLength := ma.BIndex - loB
-			if aGapLength > 0 || bGapLength > 0 {
-				pairs = append(pairs, BlockPair{
-					AIndex:  loA,
-					ALength: aGapLength,
-					BIndex:  loB,
-					BLength: bGapLength,
-					IsMatch: false,
-					IsMove:  false, // Not a move relative to its neighbors.
-				})
-			}
-		} else {
-			hasMoves = true
-		}
-		if ma.Length > 0 {  // Skip the sentinal.
-			// Emit a match.
-			pairs = append(pairs, BlockPair{
-				AIndex:  ma.AIndex,
-				ALength: ma.Length,
-				BIndex:  ma.BIndex,
-				BLength: ma.Length,
-				IsMatch: true,
-				IsMove:  isMove,
-			})
-			loA, loB = ma.AIndex + ma.Length, ma.BIndex + ma.Length
-		}
-	}
-
-	// Determine if there are any lines from B missing in the pairs as a result
-	// of treating A as primary.
-	hasAGaps := false
-	hasBGaps := false
-	if hasMoves {
-		unmatchedAs := make(map[int]bool)
-		loA = 0
-		for n := range pairs {
-			for limit := pairs[n].AIndex; loA < limit; loA++ {
-				unmatchedAs[loA] = true
-			}
-		}
-		hasAGaps = len(unmatchedAs) > 0
-
-		SortBlockPairsByBIndex(pairs)
-
-		loA, loB = 0, 0
-		var bInserts []BlockPair
-
-		for n := range pairs {
-			if loB < pairs[n].BIndex {
-				if 
-
-
-
-
-				if n == 0 {
-					// TODO Could be that the block represents a move, and we should
-					// really match up the block with the 
-
-			
-				bInserts = append(
-
-				hasBGaps = true
-				break
-			}
-			loB += pairs[n].BLength
-		}
-
-		
-
-
-
-		if hasBGaps {
-			// Sort the BlockPairs by B, and fill the gaps with Inserts (BlockPairs
-			// with no corresponding lines in A).
-			// TODO This is where we may want a heuristic about lines we'd like to keep
-			// together (e.g. if line n is non-empty AND less indented than line n+1,
-			// we commonly expect this to mean that line n+1 is somehow subordinate or
-			// contained in something that started on n; we might also work backwards
-			// on that, for example:
-			//  1:  Lorem ipsum dolor sit amet, consectetur
-			//  2:      adipiscing elit, sed do eiusmod
-			//  3:    tempor incididunt ut labore et dolore magna
-			//  4:  aliqua. Ut enim ad minim veniam, quis nostrud
-			// Here we might infer that 1 is superior to 2 and 3, and that the pairs
-			// 2-3, 3-4, and 1-4 have no such relationship.
-
-
-		// TODO Implement gap filling for B
-		// TODO Implement gap filling for A (aligning with B's gaps where possible)
-		// TODO Determine how to mark the moves such that as little is considered
-		// to have moved as possible (i.e. if moved a line from start to end, don't
-		// want to make it appear that it was all the other lines that moved).
-		/*
-			      lowestBIndexAbove := make([]int, len(rawPairs))
-			      lowestBIndexAbove[len(rawPairs)-1] = bLineCount
-			      bLo := bLineCount
-			      outOfOrderMatchCount := 0
-			      outOfOrderLinesCount := 0
-			      for n := len(rawPairs) - 1; n >= 0; n--
-				      lowestBIndexAbove[n] = bLo
-				      if bLo < rawPairs[n].BIndex
-					      outOfOrderMatchCount++
-					      outOfOrderLinesCount += rawPairs[n].BLength
-				      else
-					      bLo = rawPairs[n].BIndex
-
-			      if outOfOrderMatchCount*2 < len(rawPairs) && outOfOrderLinesCount*2 < matchLinesCount
-		*/
-
-/*
-
-
-
-
-		SortBlockPairsByAIndex(pairs)
-	}
-
-	if hasGaps {
-		// Sort the BlockPairs by B, and fill the gaps with Inserts (BlockPairs
-		// with no corresponding lines in A).
-		// TODO This is where we may want a heuristic about lines we'd like to keep
-		// together (e.g. if line n is non-empty AND less indented than line n+1,
-		// we commonly expect this to mean that line n+1 is somehow subordinate or
-		// contained in something that started on n; we might also work backwards
-		// on that, for example:
-		//  1:  Lorem ipsum dolor sit amet, consectetur
-		//  2:      adipiscing elit, sed do eiusmod
-		//  3:    tempor incididunt ut labore et dolore magna
-		//  4:  aliqua. Ut enim ad minim veniam, quis nostrud
-		// Here we might infer that 1 is superior to 2 and 3, and that the pairs
-		// 2-3, 3-4, and 1-4 have no such relationship.
-
-		SortBlockPairsByBIndex(pairs)
-		loB = 0
-
-		// TODO Implement gap filling for B
-		// TODO Implement gap filling for A (aligning with B's gaps where possible)
-		// TODO Determine how to mark the moves such that as little is considered
-		// to have moved as possible (i.e. if moved a line from start to end, don't
-		// want to make it appear that it was all the other lines that moved).
-		/*
-			      lowestBIndexAbove := make([]int, len(rawPairs))
-			      lowestBIndexAbove[len(rawPairs)-1] = bLineCount
-			      bLo := bLineCount
-			      outOfOrderMatchCount := 0
-			      outOfOrderLinesCount := 0
-			      for n := len(rawPairs) - 1; n >= 0; n--
-				      lowestBIndexAbove[n] = bLo
-				      if bLo < rawPairs[n].BIndex
-					      outOfOrderMatchCount++
-					      outOfOrderLinesCount += rawPairs[n].BLength
-				      else
-					      bLo = rawPairs[n].BIndex
-
-			      if outOfOrderMatchCount*2 < len(rawPairs) && outOfOrderLinesCount*2 < matchLinesCount
-	
-
-		SortBlockPairsByAIndex(pairs)
-	}
-
-	if !aIsPrimary {
-		SwapBlockPairs(pairs)
-	}
-
-	return
-}
-
-*/
 
 func FormatInterleaved(pairs []*BlockPair, aIsPrimary bool, aFile, bFile *File,
 	w io.Writer, printLineNumbers bool) error {

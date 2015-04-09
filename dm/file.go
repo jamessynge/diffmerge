@@ -16,7 +16,7 @@ import (
 // leading and trailing whitespace, etc.).
 
 func normalizeLine(line []byte) []byte {
-	line := bytes.TrimSpace(line)
+	line = bytes.TrimSpace(line)
 	// TODO Maybe collapse multiple spaces inside line, maybe remove all
 	// spaces, maybe normalize case.
 	return line
@@ -84,7 +84,7 @@ func ReadFile(name string) (*File, error) {
 			hash := hasher.Sum32()
 			length := len(line)
 
-			normalizedLine, normalizedHash := normalizeLine(line), 0
+			normalizedLine, normalizedHash := normalizeLine(line), uint32(0)
 			if len(normalizedLine) > 0 {
 				hasher.Reset()
 				if _, err := hasher.Write(normalizeLine(line)); err != nil {

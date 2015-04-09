@@ -118,7 +118,7 @@ func main() {
 	}
 	fmt.Println()
 
-	pairs := dm.BlockMatchesToBlockPairs(bms, true, len(f1.Lines), len(f2.Lines))
+	pairs := dm.BlockMatchesToBlockPairs(f1, f2, bms)
 	for n, pair := range pairs {
 		fmt.Printf("%d: %v\n", n, pair)
 	}
