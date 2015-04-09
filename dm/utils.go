@@ -120,6 +120,12 @@ func (a BlockPairByAIndex) Less(i, j int) bool {
 	if a[i].AIndex != a[j].AIndex {
 		return a[i].AIndex < a[j].AIndex
 	}
+	if a[i].ALength != a[j].ALength {
+		return a[i].ALength < a[j].ALength
+	}
+	if a[i].BIndex != a[j].BIndex {
+		return a[i].BIndex < a[j].BIndex
+	}
 	return a[i].BIndex < a[j].BIndex
 }
 func SortBlockPairsByAIndex(a []BlockPair) {
@@ -136,7 +142,13 @@ func (a BlockPairByBIndex) Less(i, j int) bool {
 	if a[i].BIndex != a[j].BIndex {
 		return a[i].BIndex < a[j].BIndex
 	}
-	return a[i].AIndex < a[j].AIndex
+	if a[i].BLength != a[j].BLength {
+		return a[i].BLength < a[j].BLength
+	}
+	if a[i].AIndex != a[j].AIndex {
+		return a[i].AIndex < a[j].AIndex
+	}
+	return a[i].ALength < a[j].ALength
 }
 func SortBlockPairsByBIndex(a []BlockPair) {
 	sort.Sort(BlockPairByBIndex(a))

@@ -11,8 +11,9 @@ import ()
 
 type LinePos struct {
 	Start, Length, Index int
-	Hash                 uint32
-	// TODO Add a hash for a "normalized" version of the line, with the thought
+	// Hash of the full line (including newline and/or carriage return at end).
+	Hash uint32
+	// Hash for a "normalized" version of the line, with the thought
 	// that if there is a very large amount of difference between two files, it
 	// maybe due to relatively minor formatting changes (e.g. indentation or
 	// justification) rather than other kinds of changes.
@@ -21,6 +22,7 @@ type LinePos struct {
 	// * all interior whitespace runs collapsed to a single space
 	//   or maybe completely removed
 	// * convert all letters characters to a single case (very aggressive)
+	NormalizedHash uint32
 }
 
 type File struct {
@@ -49,5 +51,6 @@ type BlockPair struct {
 	AIndex, ALength int
 	BIndex, BLength int
 	IsMatch         bool
+	IsNormalizedMatch bool
 	IsMove          bool // Does this represent a move?
 }
