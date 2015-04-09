@@ -82,20 +82,6 @@ import (
 	"github.com/jamessynge/diffmerge/dm"
 )
 
-// Ignoring re-ordering for now.
-func printFileDiffs(fileA, fileB *dm.File, bms []dm.BlockMatch) {
-	//	aIndex, bIndex := 0
-	//
-	//	printDiffs
-	//
-	//
-	//
-	//
-	//	for
-	//
-
-}
-
 func main() {
 	flag.Parse() // Scan the arguments list
 

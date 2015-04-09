@@ -48,11 +48,19 @@ func selectLines(lines []LinePos, fn func(lp LinePos) bool) []LinePos {
 	return result
 }
 
+func GetLPHash(lp LinePos) uint32 {
+  return lp.Hash
+}
+
+func GetLPNormalizedHash(lp LinePos) uint32 {
+  return lp.NormalizedHash
+}
+
 // Returns the count of occurrences of the lines.
-func countLineOccurrences(lines []LinePos) (counts map[uint32]int) {
+func countLineOccurrences(lines []LinePos, getHash func(lp LinePos) uint32) (counts map[uint32]int) {
 	counts = make(map[uint32]int)
 	for n := range lines {
-		counts[lines[n].Hash]++
+		counts[getHash(lines[n])]++
 	}
 	return
 }

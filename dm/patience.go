@@ -108,29 +108,35 @@ type indicesAndHash struct {
 }
 
 func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
-	aCounts, bCounts map[uint32]int, maxCount int) (
+	aCounts, bCounts map[uint32]int, exactMatch bool, maxCount int) (
 	aLCSLines, bLCSLines []LinePos) {
 	// Determine which lines are equally rare (with fewer than maxCount
 	// occurrences) in the two sequences aLines and bLines.
 	// Decided to require the counts to be the same as this simplifies
 	// the reasoning about the possible matches.
 
-	glog.Infof("longestCommonSubsequenceOfRareLines: %d lines from A, %d lines from B, %d is max count for rare lines", len(aLines), len(bLines), maxCount)
+  normalized := ""
+  getHash := func(lp LinePos) uint32 { return lp.Hash }
+  if !exactMatch {
+    normalized = ", normalized"
+    getHash = func(lp LinePos) uint32 { return lp.NormalizedHash }
+  }
 
-	isRare := func(count int) bool {
-		return 1 <= count && count <= maxCount
-	}
+	glog.Infof("longestCommonSubsequenceOfRareLines: %d lines from A, %d lines from B, %d is max count for rare lines%s", len(aLines), len(bLines), maxCount, normalized)
+
 	rareLineKeys := make(map[uint32]bool)
 	for h, aCount := range aCounts {
-		if isRare(aCount) && aCount == bCounts[h] {
+		if 1 <= aCount && aCount <= maxCount && aCount == bCounts[h] {
 			rareLineKeys[h] = true
 		}
 	}
 	if len(rareLineKeys) == 0 {
+	  glog.Infof("len(rareLineKeys) == 0")
 		return
 	}
+
 	selector := func(lp LinePos) bool {
-		return rareLineKeys[lp.Hash]
+		return rareLineKeys[getHash(lp)]
 	}
 	aRareLines := selectLines(aLines, selector)
 	bRareLines := selectLines(bLines, selector)
@@ -140,7 +146,7 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 	// Build an index from hash to aRareLines entries.
 	aRareLineMap := make(map[uint32][]int)
 	for aRareIndex := range aRareLines {
-		h := aRareLines[aRareIndex].Hash
+		h := getHash(aRareLines[aRareIndex])
 		aRareLineMap[h] = append(aRareLineMap[h], aRareIndex)
 	}
 
@@ -150,7 +156,7 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 	// corresponding positions in the aLines.
 	var ihs []indicesAndHash
 	for bRareIndex := range bRareLines {
-		h := bRareLines[bRareIndex].Hash
+		h := getHash(bRareLines[bRareIndex])
 		aRareLineIndices := aRareLineMap[h]
 		if len(aRareLineIndices) <= 0 {
 			glog.Fatal("expected a line in a to match this line in b")
@@ -232,21 +238,50 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 // trustworthy. We've already trimmed the common prefix and suffix.
 func getLongestCommonSubsequenceOfRareLines(aLines, bLines []LinePos) (
 	aLCSLines, bLCSLines []LinePos) {
-	aCounts := countLineOccurrences(aLines)
-	bCounts := countLineOccurrences(bLines)
+	minLinesSize := minInt(len(aLines), len(bLines))
+  glog.Infof("minLinesSize=%d", minLinesSize)
+  if minLinesSize == 0 { return }
+
+	aHashCounts := countLineOccurrences(aLines, GetLPHash)
+	bHashCounts := countLineOccurrences(bLines, GetLPHash)
+	minHashesSize := minInt(len(aHashCounts), len(bHashCounts))
+  glog.Infof("minHashesSize=%d", minHashesSize)
+
+  // TODO Delay computing this until we need it.
+	aNormalizedCounts := countLineOccurrences(aLines, GetLPNormalizedHash)
+	bNormalizedCounts := countLineOccurrences(bLines, GetLPNormalizedHash)
+	minNormalizedSize := minInt(len(aNormalizedCounts), len(bNormalizedCounts))
+  glog.Infof("minNormalizedSize=%d", minNormalizedSize)
+
+
+// TODO Pass targetLength to longestCommonSubsequenceOfRareLines
+// so it stops if it is impossible to achieve.
+// Should I start with the larger maxCounts, and go down? Or just use
+// N (e.g. 3) and never search?
 
 	// Compute the LCS of rare lines in aLines and bLines, where rare starts
 	// with unique, but then grows to include more common lines if necessary
 	// until the length of the LCS is at least targetLength (rather arbitrarily
 	// chosen).
-	targetLength := minInt(minInt(len(aLines), len(bLines))/16, 10)
+	targetLength := minInt(minLinesSize/2, maxInt(minLinesSize/16, 5))
+	glog.Infof("minLinesSize=%d,   targetLength=%d", minLinesSize, targetLength)
 	lcsLength := 0
 	for maxCount := 1; maxCount <= 5; maxCount++ {
 		aLCSLines, bLCSLines = longestCommonSubsequenceOfRareLines(
-			aLines, bLines, aCounts, bCounts, maxCount)
+			aLines, bLines, aHashCounts, bHashCounts, true, maxCount)
 		lcsLength = len(aLCSLines)
 		// Arbitrary ending critera.
 		if lcsLength >= targetLength {
+		  glog.Infof("Found enough LCS entries: %d > %d", lcsLength, targetLength)
+			return
+		}
+		// Try again, but matching normalized lines.
+		aLCSLines, bLCSLines = longestCommonSubsequenceOfRareLines(
+			aLines, bLines, aNormalizedCounts, bNormalizedCounts, false, maxCount)
+		lcsLength = len(aLCSLines)
+		// Arbitrary ending critera.
+		if lcsLength >= targetLength {
+		  glog.Infof("Found enough normalized LCS entries: %d > %d", lcsLength, targetLength)
 			return
 		}
 	}
