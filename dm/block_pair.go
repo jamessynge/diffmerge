@@ -93,17 +93,30 @@ func BlockMatchesToBlockPairs(
 		} else {
 			hasMoves = true
 		}
-		// Emit a match.
-		pairs = append(pairs, BlockPair{
-			AIndex:  ma.AIndex,
-			ALength: ma.Length,
-			BIndex:  ma.BIndex,
-			BLength: ma.Length,
-			IsMatch: true,
-			IsMove:  isMove,
-		})
-		loA, loB = ma.AIndex, ma.BIndex
+		if ma.Length > 0 {
+			// Emit a match.
+			pairs = append(pairs, BlockPair{
+				AIndex:  ma.AIndex,
+				ALength: ma.Length,
+				BIndex:  ma.BIndex,
+				BLength: ma.Length,
+				IsMatch: true,
+				IsMove:  isMove,
+			})
+			loA, loB = ma.AIndex + ma.Length, ma.BIndex + ma.Length
+		}
 	}
+
+//	if !hasMoves && (loA < aLineCount || loB < bLineCount) {
+//		pairs = append(pairs, BlockPair{
+//			AIndex:  loA,
+//			ALength: aLineCount - loA,
+//			BIndex:  loB,
+//			BLength: bLineCount - loB,
+//			IsMatch: false,
+//			IsMove:  false, // Not a move relative to its neighbors.
+//		})
+//	}
 
 	// Determine if there are any lines from B missing in the pairs as a result
 	// of treating A as primary.
@@ -173,9 +186,14 @@ func FormatInterleaved(pairs []BlockPair, aIsPrimary bool, aFile, bFile *File,
 	} else {
 		SortBlockPairsByBIndex(pairs)
 	}
+	maxDigits := DigitCount(maxInt(aFile.GetLineCount(), bFile.GetLineCount()))
 	inMove := false
-	for _, bp := range pairs {
-		glog.Infof("FormatInterleaved processing %v", bp)
+	for bn, bp := range pairs {
+		glog.Infof("FormatInterleaved processing %d: %v", bp)
+		if bn != 0 {
+			fmt.Fprintln(w)
+		}
+
 		stoppingMove := false
 		startingMove := false
 		if inMove && bp.IsMove {
@@ -204,11 +222,11 @@ func FormatInterleaved(pairs []BlockPair, aIsPrimary bool, aFile, bFile *File,
 
 			for n := start; n < start+length; n++ {
 				if printLineNumbers { // TODO Compute max width, use to right align.
-					if _, err := fmt.Fprint(w, n, ":\t"); err != nil {
+					if _, err := fmt.Fprint(w, FormatLineNum(n+1, maxDigits), " "); err != nil {
 						return err
 					}
 				}
-				fmt.Fprint(w, prefix, "\t")
+				fmt.Fprint(w, string(prefix), "\t")
 				if _, err := w.Write(f.GetLineBytes(n)); err != nil {
 					return err
 				}
@@ -237,8 +255,8 @@ func FormatInterleaved(pairs []BlockPair, aIsPrimary bool, aFile, bFile *File,
 			continue
 		}
 
-		_, err = fmt.Fprint(w, "@@ ", formatStartAndLength(bp.AIndex, bp.ALength),
-			formatStartAndLength(bp.BIndex, bp.BLength), " @@\n")
+		_, err = fmt.Fprint(w, "@@ -", formatStartAndLength(bp.AIndex+1, bp.ALength), " +",
+			formatStartAndLength(bp.BIndex+1, bp.BLength), " @@\n")
 		if err != nil {
 			return err
 		}
@@ -246,7 +264,7 @@ func FormatInterleaved(pairs []BlockPair, aIsPrimary bool, aFile, bFile *File,
 			err = printLines(aFile, bp.AIndex, bp.ALength, '-')
 		}
 		if bp.BLength > 0 {
-			err = printLines(aFile, bp.BIndex, bp.BLength, '+')
+			err = printLines(bFile, bp.BIndex, bp.BLength, '+')
 		}
 		if err != nil {
 			return err

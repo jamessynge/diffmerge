@@ -1,7 +1,9 @@
 package dm
 
 import (
+	"fmt"
 	"log"
+	"math"
 	"sort"
 )
 
@@ -151,4 +153,19 @@ func SwapBlockPairs(a []BlockPair) {
 		a[n].AIndex, a[n].BIndex = a[n].BIndex, a[n].AIndex
 		a[n].ALength, a[n].BLength = a[n].BLength, a[n].ALength
 	}
+}
+
+func DigitCount(i int) int {
+	c := 0
+	if i < 0 {
+		c++
+		i = -i
+	} else if i == 0 {
+		return 1
+	}
+	return c + int(math.Ceil(math.Log10(float64(i))))
+}
+
+func FormatLineNum(i, maxDigits int) string {
+	return fmt.Sprintf("%*d", maxDigits, i)
 }

@@ -86,3 +86,7 @@ func (p *File) GetLineBytes(n int) []byte {
 	}
 	return nil
 }
+
+func (p *File) GetLineCount() int {
+	return len(p.Lines)
+}
