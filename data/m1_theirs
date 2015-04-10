@@ -1,0 +1,15 @@
+void func1() {
+  x += 1
+}
+
+void func2() {
+  x += 2
+}
+
+void func4() {
+  y += 2
+}
+
+void func5() {
+  y += 1
+}

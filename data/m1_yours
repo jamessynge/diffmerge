@@ -6,6 +6,14 @@ void functhreehalves() {
   x += 1.5
 }
 
+void func4() {
+  y += 2
+}
+
 void func2() {
   x += 2
+}
+
+void func5() {
+  y += 1
 }

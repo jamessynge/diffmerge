@@ -9,3 +9,11 @@ void functhreehalves() {
 void func2() {
   x += 2
 }
+
+void func4() {
+  y += 2
+}
+
+void func5() {
+  y += 1
+}
