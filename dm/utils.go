@@ -1,11 +1,24 @@
 package dm
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"math"
 	"sort"
 )
+
+//	// From https://blog.golang.org/errors-are-values
+//	type errWriter struct {
+//	    w   io.Writer
+//	    err error
+//	}
+//	func (ew *errWriter) write(buf []byte) {
+//	    if ew.err != nil {
+//	        return
+//	    }
+//	    _, ew.err = ew.w.Write(buf)
+//	}
 
 func minInt(i, j int) int {
 	if i < j {
@@ -49,11 +62,11 @@ func selectLines(lines []LinePos, fn func(lp LinePos) bool) []LinePos {
 }
 
 func GetLPHash(lp LinePos) uint32 {
-  return lp.Hash
+	return lp.Hash
 }
 
 func GetLPNormalizedHash(lp LinePos) uint32 {
-  return lp.NormalizedHash
+	return lp.NormalizedHash
 }
 
 // Returns the count of occurrences of the lines.
@@ -188,4 +201,11 @@ func DigitCount(i int) int {
 
 func FormatLineNum(i, maxDigits int) string {
 	return fmt.Sprintf("%*d", maxDigits, i)
+}
+
+func normalizeLine(line []byte) []byte {
+	line = bytes.TrimSpace(line)
+	// TODO Maybe collapse multiple spaces inside line, maybe remove all
+	// spaces, maybe normalize case.
+	return line
 }

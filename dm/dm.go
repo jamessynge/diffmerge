@@ -25,17 +25,6 @@ type LinePos struct {
 	NormalizedHash uint32
 }
 
-type File struct {
-	Name  string    // Command line arg
-	Body  []byte    // Body of the file
-	Lines []LinePos // Locations and hashes of the file lines.
-
-	// Counts is in support of Patience Diff, where we want to know which lines
-	// are unique (or later, maybe want to find "relatively" unique lines).
-	// Definitely assuming here that we don't have hash collisions.
-	Counts map[uint32]int // Count of hash occurrences in file.
-}
-
 // Represents a match between files A and B.
 type BlockMatch struct {
 	// Index is same as LinePos.Index of starting line of match.
