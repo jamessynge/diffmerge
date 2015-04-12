@@ -9,7 +9,7 @@ import ()
 // times in each range.
 // maxCount is the maximum number of times a hash may appear in the range
 // and still be considered rare; maxCount==1 is the Patience Diff approach.
-func FindRareLinesInRanges(aRange, bRange *FileRange,
+func FindRareLinesInRanges(aRange, bRange FileRange,
 	normalizedMatch, sameCount bool, maxCount int) (aRareLines, bRareLines []LinePos) {
 	var aHashPositions, bHashPositions HashPositions
 	if normalizedMatch {

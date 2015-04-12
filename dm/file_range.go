@@ -1,11 +1,46 @@
 package dm
 
-import ()
+import (
+	"github.com/golang/glog"
+)
 
-// Represents a range of lines in one file. Intended to be used for computing
+// Represents a range of lines in a file. Intended to be used for computing
 // the alignment of two files after having eliminated the common prefix and
 // suffix lines of the files.
-type FileRange struct {
+
+type FileRange interface {
+	IsContiguous() bool
+
+	// Returns the number of lines in the range.
+	GetLineCount() int
+
+	// Returns the index of the first line (zero for the whole file).
+	GetStartLine() int
+
+	// Returns the LinePos for the line at offset within this range (where zero
+	// is the first line in the range).
+	GetLinePosRelative(offsetInRange int) LinePos
+
+	// Returns the hash of the line (full or normalized) at the offset within this
+	// range (where zero is the first line in the range).
+	GetLineHashRelative(offsetInRange int, normalized bool) uint32
+
+	// Returns those lines for which fn returns true.
+	Select(fn func(lp LinePos) bool) []LinePos
+
+	// Returns the positions (line numbers, zero-based) within
+	// the underlying file at which the full line hashes appear.
+	GetHashPositions() map[uint32][]int
+
+	// Returns the positions (line numbers, zero-based) within
+	// the underlying file at which the normalized line hashes appear.
+	GetNormalizedHashPositions() map[uint32][]int
+
+	// Returns a new FileRange for the specified subset.
+	GetSubRange(startOffsetInRange, length int) FileRange
+}
+
+type fileRange struct {
 	file *File
 
 	start  int // First line in the range
@@ -19,8 +54,12 @@ type FileRange struct {
 	normalizedHashPositions HashPositions // Position of different hashes in the range (absolute line numbers).
 }
 
-func CreateFileRange(file *File, start, length int) *FileRange {
-	return &FileRange{
+func CreateFileRange(file *File, start, length int) FileRange {
+	if start < 0 || start+length > file.GetLineCount() {
+		glog.Fatal("New range (%d, +%d) is invalid (max length %d)",
+			start, length, file.GetLineCount())
+	}
+	return &fileRange{
 		file:   file,
 		start:  start,
 		length: length,
@@ -28,7 +67,24 @@ func CreateFileRange(file *File, start, length int) *FileRange {
 	}
 }
 
-func (p *FileRange) GetHashPositions() map[uint32][]int {
+func (p *fileRange) IsContiguous() bool { return true }
+func (p *fileRange) GetLineCount() int  { return p.length }
+func (p *fileRange) GetStartLine() int  { return p.start }
+
+func (p *fileRange) GetLinePosRelative(offsetInRange int) LinePos {
+	return p.file.Lines[p.start+offsetInRange]
+}
+
+func (p *fileRange) GetLineHashRelative(offsetInRange int, normalized bool) uint32 {
+	lp := &p.file.Lines[p.start+offsetInRange]
+	if normalized {
+		return lp.NormalizedHash
+	} else {
+		return lp.Hash
+	}
+}
+
+func (p *fileRange) GetHashPositions() map[uint32][]int {
 	// Populate map if necessary.
 	if len(p.hashPositions) == 0 {
 		p.hashPositions = make(map[uint32][]int)
@@ -40,7 +96,7 @@ func (p *FileRange) GetHashPositions() map[uint32][]int {
 	return p.hashPositions
 }
 
-func (p *FileRange) GetNormalizedHashPositions() map[uint32][]int {
+func (p *fileRange) GetNormalizedHashPositions() map[uint32][]int {
 	// Populate map if necessary.
 	if len(p.normalizedHashPositions) == 0 {
 		p.normalizedHashPositions = make(map[uint32][]int)
@@ -52,7 +108,7 @@ func (p *FileRange) GetNormalizedHashPositions() map[uint32][]int {
 	return p.normalizedHashPositions
 }
 
-func (p *FileRange) Select(fn func(lp LinePos) bool) []LinePos {
+func (p *fileRange) Select(fn func(lp LinePos) bool) []LinePos {
 	var result []LinePos
 	for n := 0; n < p.length; n++ {
 		lp := p.file.Lines[p.start+n]
@@ -61,4 +117,21 @@ func (p *FileRange) Select(fn func(lp LinePos) bool) []LinePos {
 		}
 	}
 	return result
+}
+
+func (p *fileRange) GetSubRange(startOffsetInRange, length int) FileRange {
+	if startOffsetInRange < 0 || startOffsetInRange+length > p.length {
+		glog.Fatal("New range (%d, +%d) is invalid (max length %d)",
+			startOffsetInRange, length, p.length)
+	}
+	if startOffsetInRange == 0 && length == p.length {
+		return p
+	}
+	start := p.start + startOffsetInRange
+	return &fileRange{
+		file:   p.file,
+		start:  start,
+		length: length,
+		beyond: start + length,
+	}
 }

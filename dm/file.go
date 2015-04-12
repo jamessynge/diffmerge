@@ -23,6 +23,10 @@ type File struct {
 	//	Counts map[uint32]int // Count of hash occurrences in file.
 }
 
+func (p *File) GetSubRange(start, length int) FileRange {
+	return CreateFileRange(p, start, length)
+}
+
 func (p *File) Select(fn func(lp LinePos) bool) []LinePos {
 	var result []LinePos
 	for n := range p.Lines {

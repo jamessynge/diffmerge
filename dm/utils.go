@@ -36,6 +36,13 @@ func maxInt(i, j int) int {
 	}
 }
 
+func chooseString(b bool, trueString, falseString string) string {
+	if b {
+		return trueString
+	}
+	return falseString
+}
+
 func findLineWithIndex(lines []LinePos, index int) int {
 	for lo, hi := 0, len(lines)-1; lo <= hi; {
 		mid := (lo + hi) / 2
@@ -67,6 +74,14 @@ func GetLPHash(lp LinePos) uint32 {
 
 func GetLPNormalizedHash(lp LinePos) uint32 {
 	return lp.NormalizedHash
+}
+
+func SelectHashGetter(normalized bool) func(lp LinePos) uint32 {
+	if normalized {
+		return GetLPNormalizedHash
+	} else {
+		return GetLPHash
+	}
 }
 
 // Returns the count of occurrences of the lines.

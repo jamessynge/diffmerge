@@ -43,7 +43,7 @@ func (s IntInt) AssertEq(o IntInt, t *testing.T) {
 	}
 }
 
-func GetSortedPatienceSortResults(input... int) (results IntInt) {
+func GetSortedPatienceSortResults(input ...int) (results IntInt) {
 	ch := PatienceSort(input)
 	for lis := range ch {
 		results = append(results, lis)

@@ -74,41 +74,109 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/golang/glog"
 
 	"github.com/jamessynge/diffmerge/dm"
 )
 
+var (
+	pDiff3Flag = flag.Bool(
+		"diff3", false, "Find difference between 3 files.")
+	pDetectMoves = flag.Bool(
+		"detect-moves", true, "Detect block moves.")
+	pAlignNormalizedLines = flag.Bool(
+		"align-normalized-lines", true, "Compare lines by hash after normalizing?")
+	pNumRareLines = flag.Int(
+		"num-rare-lines", 1, "Limit on occurrences of a 'rare' line.")
+)
+
+func ReadFileOrDie(name string) *dm.File {
+	// TODO Support 1 file named "-", which means read from stdin.
+	f, err := dm.ReadFile(name)
+	if err != nil {
+		glog.Fatalf("Failed to read file %s: %s", name, err)
+	}
+	glog.Infof("Loaded %d lines from %s", len(f.Lines), f.Name)
+	return f
+}
+
+func ComputeBlockPairs(fromFile, toFile *dm.File) []*dm.BlockPair {
+	bms := dm.BramCohensPatienceDiff(fromFile, toFile)
+
+	glog.Info("Initial matches found:")
+	for n, bm := range bms {
+		glog.Infof("%d: %v", n, bm)
+	}
+	glog.Infoln()
+
+	pairs := dm.BlockMatchesToBlockPairs(fromFile, toFile, bms)
+
+	glog.Info("BlockPairs:")
+	for n, pair := range pairs {
+		glog.Infof("%d: %v", n, pair)
+	}
+	glog.Infoln()
+
+	return pairs
+}
+
+type CmdStatus int
+
+const (
+	ConflictFree CmdStatus = iota
+	SomeConflicts
+	AnError
+)
+
+func Diff2Files(fromFile, toFile *dm.File) CmdStatus {
+	pairs := ComputeBlockPairs(fromFile, toFile)
+
+	dm.FormatInterleaved(pairs, true, fromFile, toFile, os.Stdout, true)
+
+	if len(pairs) == 1 && pairs[0].IsMatch {
+		return ConflictFree
+	} else {
+		return SomeConflicts
+	}
+}
+func Diff3Files(yours, origin, theirs *dm.File) CmdStatus {
+	return AnError
+}
+func Merge3Files(yours, origin, theirs *dm.File) CmdStatus {
+	return AnError
+}
+
 func main() {
 	flag.Parse() // Scan the arguments list
 
-	f1, err := dm.ReadFile(flag.Arg(0))
-	if err != nil {
-		glog.Fatalf("Failed to read file %s: %s", flag.Arg(0), err)
+	cmd := filepath.Base(os.Args[0])
+	glog.V(1).Infoln("cmd =", cmd)
+
+	var status CmdStatus
+	switch flag.NArg() {
+	case 2:
+		fromFile := ReadFileOrDie(flag.Arg(0))
+		toFile := ReadFileOrDie(flag.Arg(1))
+		status = Diff2Files(fromFile, toFile)
+
+	case 3:
+		yours := ReadFileOrDie(flag.Arg(0))
+		origin := ReadFileOrDie(flag.Arg(1))
+		theirs := ReadFileOrDie(flag.Arg(2))
+		if *pDiff3Flag {
+			status = Diff3Files(yours, origin, theirs)
+		} else {
+			status = Merge3Files(yours, origin, theirs)
+		}
+
+	default:
+		glog.Errorf("Command requires 2 or 3 arguments, not %d", flag.NArg())
+		flag.Usage()
+		status = AnError
 	}
-	glog.Infof("Loaded %d lines from %s", len(f1.Lines), f1.Name)
 
-	f2, err := dm.ReadFile(flag.Arg(1))
-	if err != nil {
-		glog.Fatalf("Failed to read file %s: %s", flag.Arg(1), err)
-	}
-	glog.Infof("Loaded %d lines from %s", len(f2.Lines), f2.Name)
-
-	bms := dm.BramCohensPatienceDiff(f1, f2)
-
-	for n, bm := range bms {
-		fmt.Printf("%d: %v\n", n, bm)
-	}
-	fmt.Println()
-
-	pairs := dm.BlockMatchesToBlockPairs(f1, f2, bms)
-	for n, pair := range pairs {
-		fmt.Printf("%d: %v\n", n, pair)
-	}
-	fmt.Println()
-
-	dm.FormatInterleaved(pairs, true, f1, f2, os.Stdout, true)
+	os.Exit(int(status) & 0xff)
 }
