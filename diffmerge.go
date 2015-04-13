@@ -85,12 +85,6 @@ import (
 var (
 	pDiff3Flag = flag.Bool(
 		"diff3", false, "Find difference between 3 files.")
-	pDetectMoves = flag.Bool(
-		"detect-moves", true, "Detect block moves.")
-	pAlignNormalizedLines = flag.Bool(
-		"align-normalized-lines", true, "Compare lines by hash after normalizing?")
-	pNumRareLines = flag.Int(
-		"num-rare-lines", 1, "Limit on occurrences of a 'rare' line.")
 )
 
 func ReadFileOrDie(name string) *dm.File {
@@ -150,6 +144,8 @@ func Merge3Files(yours, origin, theirs *dm.File) CmdStatus {
 }
 
 func main() {
+	diffConfig := &dm.DifferencerConfig{}
+	diffConfig.CreateFlags(flag.CommandLine)
 	flag.Parse() // Scan the arguments list
 
 	cmd := filepath.Base(os.Args[0])

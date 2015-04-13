@@ -17,10 +17,11 @@ type File struct {
 	Body  []byte    // Body of the file
 	Lines []LinePos // Locations and hashes of the file lines.
 
-	// Counts is in support of Patience Diff, where we want to know which lines
-	// are unique (or later, maybe want to find "relatively" unique lines).
-	// Definitely assuming here that we don't have hash collisions.
-	//	Counts map[uint32]int // Count of hash occurrences in file.
+	fullRange FileRange
+}
+
+func (p *File) GetFullRange() FileRange {
+	return p.fullRange
 }
 
 func (p *File) GetSubRange(start, length int) FileRange {
@@ -106,5 +107,6 @@ func ReadFile(name string) (*File, error) {
 			return nil, err
 		}
 	}
+	p.fullRange = CreateFileRange(p, 0, p.GetLineCount())
 	return p, nil
 }
