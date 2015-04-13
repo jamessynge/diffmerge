@@ -47,11 +47,21 @@ func PerformDiff(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPa
 		// backward.
 		// TODO Should the backward extension wait until after the
 		// forward normalized extension occurs?
-		p.fillGaps()
+		p.fillAllGaps()
 	}
 
 	return p.getPairsToReturn()
 }
+
+// TODO Introduce two ordered data structures for storing the *BlockPair's,
+// one sorting by AIndex, the other by BIndex. We'll need the ability to:
+// * insert elements, perhaps with a hint (e.g. when splitting a BlockPair,
+//   we might want to replace one entry with several);
+// * forward iterate over the members, tolerating modifications (e.g. filling
+//   gaps while iterating, or splitting an entry).
+// * get the last member, and possibly the first;
+// * lookup members (e.g. when filling gaps by AIndex, we'll need to find
+//   the neighbors of the BlockPair in B).
 
 type diffState struct {
 	// Full files
@@ -112,7 +122,7 @@ func (p *diffState) addBlockMatch(m BlockMatch, normalizedMatch bool) bool {
 		ALength:           m.Length,
 		BIndex:            m.BIndex,
 		BLength:           m.Length,
-		IsMatch: !normalizedMatch,
+		IsMatch:           !normalizedMatch,
 		IsNormalizedMatch: normalizedMatch,
 	}
 	if glog.V(1) {
@@ -265,20 +275,19 @@ func (p *diffState) normalizedMatchCommonSuffix() bool {
 }
 
 func (p *diffState) matchWithMoves(
-		aLines, bLines []LinePos,
-		getHash func(lp LinePos) uint32) []BlockMatch {
+	aLines, bLines []LinePos,
+	getHash func(lp LinePos) uint32) []BlockMatch {
 	matches := BasicTichyMaximalBlockMoves(aLines, bLines, getHash)
 	return matches
 }
 
 func (p *diffState) linearMatch(
-		aLines, bLines []LinePos,
-		getHash func(lp LinePos) uint32) []BlockMatch {
+	aLines, bLines []LinePos,
+	getHash func(lp LinePos) uint32) []BlockMatch {
 
-panic("NYI")
-return nil
+	panic("NYI")
+	return nil
 }
-
 
 func (p *diffState) matchMiddle() {
 	// If we're here, then aRange and bRange contains the remaining lines to be
@@ -287,8 +296,8 @@ func (p *diffState) matchMiddle() {
 	var aLines, bLines []LinePos
 	if p.config.alignRareLines {
 		aLines, bLines = FindRareLinesInRanges(
-				p.aRange, p.bRange, p.config.alignNormalizedLines,
-				p.config.requireSameRarity, p.config.maxRareLineOccurrences)
+			p.aRange, p.bRange, p.config.alignNormalizedLines,
+			p.config.requireSameRarity, p.config.maxRareLineOccurrences)
 	} else {
 		selectAll := func(lp LinePos) bool { return true }
 		aLines = p.aRange.Select(selectAll)
@@ -317,7 +326,9 @@ func (p *diffState) isExactMatch(aIndex, bIndex int) bool {
 
 func (p *diffState) isExactMatchSequence(aIndex, bIndex, length int) bool {
 	for length > 0 {
-		if !p.isExactMatch(aIndex, bIndex) { return false }
+		if !p.isExactMatch(aIndex, bIndex) {
+			return false
+		}
 		aIndex++
 		bIndex++
 		length--
@@ -327,19 +338,21 @@ func (p *diffState) isExactMatchSequence(aIndex, bIndex, length int) bool {
 
 func (p *diffState) splitIfMixedMatch(n int) {
 	bp := p.pairs[n]
-	if !bp.IsNormalizedMatch { return }
+	if !bp.IsNormalizedMatch {
+		return
+	}
 	var runLengths []int
 	var exactRuns []bool
 	aIndex, bIndex, length := bp.AIndex, bp.BIndex, bp.ALength
 	aLimit := aIndex + length
 	for numRuns := 0; aIndex < aLimit; {
 		isExact := p.isExactMatch(aIndex, bIndex)
-		if numRuns == 0 || isExact != exactRuns[numRuns - 1] {
+		if numRuns == 0 || isExact != exactRuns[numRuns-1] {
 			runLengths = append(runLengths, 1)
 			exactRuns = append(exactRuns, isExact)
 			numRuns++
 		} else {
-			runLengths[numRuns - 1]++
+			runLengths[numRuns-1]++
 		}
 		aIndex++
 		bIndex++
@@ -347,13 +360,13 @@ func (p *diffState) splitIfMixedMatch(n int) {
 	aIndex, bIndex = bp.AIndex, bp.BIndex
 	for j := range runLengths {
 		pair := &BlockPair{
-				AIndex:            aIndex,
-				ALength:           runLengths[j],
-				BIndex:            bIndex,
-				BLength:           runLengths[j],
-				IsMatch:           exactRuns[j],
-				IsMove:            false,
-				IsNormalizedMatch: !exactRuns[j],
+			AIndex:            aIndex,
+			ALength:           runLengths[j],
+			BIndex:            bIndex,
+			BLength:           runLengths[j],
+			IsMatch:           exactRuns[j],
+			IsMove:            false,
+			IsNormalizedMatch: !exactRuns[j],
 		}
 		if j == 0 {
 			p.pairs[n] = pair
@@ -372,7 +385,9 @@ func (p *diffState) splitMixedMatches() {
 	}
 }
 
-
-func (p *diffState) fillGaps() {
+func (p *diffState) fillABGaps() {
 }
 
+
+func (p *diffState) fillAllGaps() {
+}
