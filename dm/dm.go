@@ -9,6 +9,29 @@ import ()
 // out to be a problem in practice (need to add detection code), then
 // I'll change things.
 
+// TODO Introduce new interfaces so that we can do coarse grained matching
+// (line at a time), medium grained matching (words/symbols/whitespace) or
+// fine grained matching (characters), all with the same algorithms. For
+// example:
+//
+// Atom: unit of matching
+// AtomSequence:
+//    collection of Atoms maintaining some order, possibly not ordered
+//    by position in file, and possibly not covering the full file.
+//    (allow repeats?)
+// AtomString:
+//    collection of unique Atoms in the same order they appear in the
+//    file, and where adjacent atoms in the string are adjacent in the file.
+// AtomStringTree:
+//    collection of AtomStrings in the same order as their constituent
+//    atoms.
+//
+// Since it would take more work to diff entire files at the character level,
+// we'd instead diff lines initially to get an alignment (e.g. which lines
+// have been copied, moved, deleted, inserted or changed, and which lines are
+// unmodified); after that we can focus on the areas of change at the word
+// or character level.
+
 type LinePos struct {
 	Start, Length, Index int
 	// Hash of the full line (including newline and/or carriage return at end).

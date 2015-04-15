@@ -54,11 +54,13 @@ func PerformDiff(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPa
 }
 
 // TODO Introduce two ordered data structures for storing the *BlockPair's,
-// one sorting by AIndex, the other by BIndex. We'll need the ability to:
+// one sorting by AIndex, the other by BIndex. This will eliminate all the
+// SortBlockPairsBy*Index calls.
+// We'll need the ability to:
 // * insert elements, perhaps with a hint (e.g. when splitting a BlockPair,
 //   we might want to replace one entry with several);
 // * forward iterate over the members, tolerating modifications (e.g. filling
-//   gaps while iterating, or splitting an entry).
+//   gaps while iterating, or splitting an entry);
 // * get the last member, and possibly the first;
 // * lookup members (e.g. when filling gaps by AIndex, we'll need to find
 //   the neighbors of the BlockPair in B).
@@ -89,6 +91,9 @@ func FileRangeIsEmpty(r FileRange) bool {
 }
 
 func (p *diffState) isMatchingComplete() bool {
+	// This approach assumes that no lines will be copied.
+	// TODO Ideally we'd be able to detect copies, and even better would be
+	// to detect changes within the copies.
 	return p.aRemainingCount > 0 && p.bRemainingCount > 0
 }
 
@@ -282,15 +287,50 @@ func (p *diffState) matchWithMoves(
 }
 
 func (p *diffState) linearMatch(
-	aLines, bLines []LinePos,
-	getHash func(lp LinePos) uint32) []BlockMatch {
+	aLines, bLines []LinePos) []BlockMatch {
+	var getSimilarity func(aIndex, bIndex int) float32
+	var normalizedSimilarity float32
+	if p.config.alignNormalizedLines {
+		normalizedSimilarity = float32(p.config.lcsNormalizedSimilarity)
+		if !(0 < normalizedSimilarity && normalizedSimilarity <= 1) {
+			glog.Fatalf("--lcs-normalized-similarity=%v is out of range (0,1].",
+				normalizedSimilarity)
+		}
+		getSimilarity = func(aIndex, bIndex int) float32 {
+			if aLines[aIndex].Hash == bLines[bIndex].Hash {
+				return 1
+			} else if aLines[aIndex].NormalizedHash == bLines[bIndex].NormalizedHash {
+				return normalizedSimilarity
+			} else {
+				return 0
+			}
+		}
+	} else {
+		getSimilarity = func(aIndex, bIndex int) float32 {
+			if aLines[aIndex].Hash == bLines[bIndex].Hash {
+				return 1
+			} else {
+				return 0
+			}
+		}
+	}
 
-	panic("NYI")
-	return nil
+	abIndices := WeightedLCS(len(aLines), len(bLines), getSimilarity)
+	var result []BlockMatch
+	for n, ab := range abIndices {
+		ai, bi := ab.AIndex, ab.BIndex  // Indices in aLines and bLines, respectively.
+		ai, bi = aLines[ai].Index, bLines[bi].Index  // Now line numbers in A and B.
+		result = append(result, BlockMatch{
+			AIndex: ai,
+			BIndex: bi,
+			1,
+		})
+	}
+	return result
 }
 
 func (p *diffState) matchMiddle() {
-	// If we're here, then aRange and bRange contains the remaining lines to be
+	// If we're here, then aRange and bRange contain the remaining lines to be
 	// matched.  Figure out the subset of lines we're going to be matching.
 
 	var aLines, bLines []LinePos
@@ -304,18 +344,44 @@ func (p *diffState) matchMiddle() {
 		bLines = p.bRange.Select(selectAll)
 	}
 
-	getHash := SelectHashGetter(p.config.alignNormalizedLines)
+	// TODO Move rest of function into matchWithMoves and linearMatch,
+	// add helpers they can share as necessary.
+
+
 
 	var matches []BlockMatch
 	if p.config.detectBlockMoves {
+		getHash := SelectHashGetter(p.config.alignNormalizedLines)
 		matches = p.matchWithMoves(aLines, bLines, getHash)
 	} else {
-		matches = p.linearMatch(aLines, bLines, getHash)
+		matches = p.linearMatch(aLines, bLines)
 	}
 
 	// Convert these to BlockPairs
-	for _, m := range matches {
-		p.addBlockMatch(m, p.config.alignNormalizedLines)
+	if p.config.alignRareLines {
+		// They aren't necessarily contiguous, so make each matched line a separate
+		// entry, and combine them later if appropriate.
+		for _, m := range matches {
+			for n := 0; n < m.Length; n++ {
+				ai := m.AIndex + n
+				bi := m.BIndex + n
+				isExactMatch := (!p.config.alignNormalizedLines ||
+						p.aFile.GetHashOfLine(ai) == p.bFile.GetHashOfLine(bi))
+				pair := &BlockPair{
+					AIndex:            ai,
+					ALength:           1,
+					BIndex:            bi,
+					BLength:           1,
+					IsMatch:           isExactMatch,
+					IsNormalizedMatch: !isExactMatch,
+				}
+				p.addBlockPair(pair)
+			}
+		}
+	} else {
+		for _, m := range matches {
+			p.addBlockMatch(m, p.config.alignNormalizedLines)
+		}
 	}
 }
 
@@ -385,9 +451,16 @@ func (p *diffState) splitMixedMatches() {
 	}
 }
 
-func (p *diffState) fillABGaps() {
+// Attempt to shrink all gaps by extending existing exact or normalized matches,
+// or creating new normalized or exact matches (respectively) adjacent to the
+// existing matches.
+func (p *diffState) extendAllMatches() {
+	
 }
 
+//func (p *diffState) fillABGaps() {
+//}
 
 func (p *diffState) fillAllGaps() {
+	
 }

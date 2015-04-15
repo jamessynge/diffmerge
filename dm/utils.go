@@ -36,6 +36,27 @@ func maxInt(i, j int) int {
 	}
 }
 
+func maxFloat32(u, v float32) float32 {
+	if u < v {
+		return v
+	} else {
+		return u
+	}
+}
+
+func max3Float32(u, v, w float32) float32 {
+	if u < v {
+		if v < w {
+			return w
+		}
+		return v
+	}
+	if u < w {
+		return w
+	}
+	return u
+}
+
 func chooseString(b bool, trueString, falseString string) string {
 	if b {
 		return trueString

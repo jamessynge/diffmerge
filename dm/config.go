@@ -47,6 +47,12 @@ type DifferencerConfig struct {
 	// When computing an alignment between files, should blocks of moved lines
 	// be detected (i.e. detect re-ordering of paragraphs/functions).
 	detectBlockMoves bool
+
+	// When computing the longest common subsequence of two file ranges,
+	// how similar are two normalized lines to be considered, where 0 is
+	// completely dissimilar, and 1 is equal.
+	lcsNormalizedSimilarity float64
+
 }
 
 func (p *DifferencerConfig) CreateFlags(f *flag.FlagSet) {
@@ -95,5 +101,12 @@ func (p *DifferencerConfig) CreateFlags(f *flag.FlagSet) {
 		&p.detectBlockMoves, "detect-block-moves", true, `
 		When computing an alignment between files, should blocks of moved lines
 		be detected (i.e. detect re-ordering of paragraphs/functions).
+		`)
+
+	f.Float64Var(
+		&p.lcsNormalizedSimilarity, "lcs-normalized-similarity", 0.5, `
+		When computing the longest common subsequence of two file ranges,
+	  how similar are two normalized lines to be considered, where 0 is
+	  completely dissimilar, and 1 is equal.
 		`)
 }
