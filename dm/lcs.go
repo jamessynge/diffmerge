@@ -21,7 +21,7 @@ func WeightedLCS(aLength, bLength int, getSimilarity func(aIndex, bIndex int) fl
 	// the right-left index (left is towards 0). 
 	table := make([][]float32, aLength + 1)
 	for i := range table {
-		table[i] = make([]int, bLength + 1)
+		table[i] = make([]float32, bLength + 1)
 	}
 
 	for aIndex := 0; aIndex < aLength; aIndex++ {

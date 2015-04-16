@@ -1,6 +1,7 @@
 package dm
 
 import (
+	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/glog"
 )
 
@@ -14,6 +15,8 @@ func PerformDiff(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPa
 		bRemainingCount: bFile.GetLineCount(),
 		config:          config,
 	}
+
+	glog.Info("PerformDiff entry, diffState:\n", p.SDumpToDepth(1))
 
 	if config.matchEnds {
 		if !(p.exactMatchCommonPrefix() && p.exactMatchCommonSuffix()) {
@@ -86,6 +89,13 @@ type diffState struct {
 	config DifferencerConfig
 }
 
+
+func (p *diffState) SDumpToDepth(depth int) string {
+	var cs spew.ConfigState = spew.Config
+	cs.MaxDepth = depth
+	return cs.Sdump(p)
+}
+
 func FileRangeIsEmpty(r FileRange) bool {
 	return r == nil || r.GetLineCount() == 0
 }
@@ -94,7 +104,7 @@ func (p *diffState) isMatchingComplete() bool {
 	// This approach assumes that no lines will be copied.
 	// TODO Ideally we'd be able to detect copies, and even better would be
 	// to detect changes within the copies.
-	return p.aRemainingCount > 0 && p.bRemainingCount > 0
+	return p.aRemainingCount == 0 || p.bRemainingCount == 0
 }
 
 // Returns false (stop) if one or both of the remaining counts drops to zero,
@@ -114,6 +124,9 @@ func (p *diffState) addBlockPair(bp *BlockPair) bool {
 			glog.Fatalf("Adding BlockPair dropped a remaining count below zero!\n"+
 				"BlockPair: %v\ndiffState: %v", *bp, *p)
 		}
+
+		glog.Infof("addBlockPair: aRemainingCount=%d   bRemainingCount=%d",
+		p.aRemainingCount, p.bRemainingCount)
 	}
 	return p.isMatchingComplete()
 }
@@ -139,7 +152,9 @@ func (p *diffState) addBlockMatch(m BlockMatch, normalizedMatch bool) bool {
 func (p *diffState) getPairsToReturn() []*BlockPair {
 	if p.aRemainingCount > 0 {
 		if p.bRemainingCount > 0 {
-			glog.Fatalf("getPairsToReturn Not ready to return yet!\ndiffState: %v", *p)
+			glog.Fatalf(
+				"getPairsToReturn Not ready to return yet!\ndiffState:\n%s",
+				p.SDumpToDepth(2))
 		}
 		// Sort by A, fill any gaps.
 		SortBlockPairsByAIndex(p.pairs)
@@ -255,12 +270,36 @@ type endMatcher func(aRange, bRange FileRange, normalized bool) (
 func (p *diffState) commonEndMatcher(fn endMatcher, normalized bool) bool {
 	// Assuming here that p.aRange and p.bRange are non-empty.
 	aRange, bRange := p.aRange, p.bRange
+
+	glog.Infof("commonEndMatcher(%v, %v)  lines: %d  and  %d", fn, normalized,
+			aRange.GetLineCount(), bRange.GetLineCount())
+
 	var bp *BlockPair
 	p.aRange, p.bRange, bp = fn(aRange, bRange, normalized)
-	if bp != nil {
-		p.pairs = append(p.pairs, bp)
+
+	if p.aRange == nil {
+		glog.Infof("commonEndMatcher: matched ALL %d lines of aRange", aRange.GetLineCount())
+	} else {
+		before, after := aRange.GetLineCount(), p.aRange.GetLineCount()
+		if after != before {
+			glog.Infof("commonEndMatcher: matched %d lines of %d, leaving %d  (aRange)",
+				before - after, before, after)
+		}
 	}
-	return FileRangeIsEmpty(p.aRange) || FileRangeIsEmpty(p.bRange)
+
+	if p.bRange == nil {
+		glog.Infof("commonEndMatcher: matched ALL %d lines of bRange", bRange.GetLineCount())
+	} else {
+		before, after := bRange.GetLineCount(), p.bRange.GetLineCount()
+		if after != before {
+			glog.Infof("commonEndMatcher: matched %d lines of %d, leaving %d  (bRange)",
+				before - after, before, after)
+		}
+	}
+
+	p.addBlockPair(bp)
+
+	return !(FileRangeIsEmpty(p.aRange) || FileRangeIsEmpty(p.bRange))
 }
 
 func (p *diffState) exactMatchCommonPrefix() bool {
@@ -317,13 +356,13 @@ func (p *diffState) linearMatch(
 
 	abIndices := WeightedLCS(len(aLines), len(bLines), getSimilarity)
 	var result []BlockMatch
-	for n, ab := range abIndices {
+	for _, ab := range abIndices {
 		ai, bi := ab.AIndex, ab.BIndex  // Indices in aLines and bLines, respectively.
 		ai, bi = aLines[ai].Index, bLines[bi].Index  // Now line numbers in A and B.
 		result = append(result, BlockMatch{
 			AIndex: ai,
 			BIndex: bi,
-			1,
+			Length: 1,
 		})
 	}
 	return result
