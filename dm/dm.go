@@ -66,3 +66,8 @@ type BlockPair struct {
 	IsNormalizedMatch bool
 	IsMove            bool // Does this represent a move?
 }
+
+type IndexPair struct {
+	Index1, Index2 int
+}
+

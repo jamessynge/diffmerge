@@ -6,10 +6,6 @@ import (
 	"github.com/golang/glog"
 )
 
-type IndexPair struct {
-	AIndex, BIndex int
-}
-
 // Dynamic programming solution to produce a weighted LCS of two "strings"
 // A and B of length aLength and bLength, respectively.
 // getSimilarity must return a value between 0 and 1, inclusive.
