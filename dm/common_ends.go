@@ -15,10 +15,10 @@ func MatchCommonPrefix(aRange, bRange FileRange, normalized bool) (
 	limit := minInt(aLineCount, bLineCount)
 	isContiguous := aRange.IsContiguous() && bRange.IsContiguous()
 
-	glog.Infof("MatchCommonPrefix: %d lines from A, %d lines from B, limit of %d%s",
-		aLineCount, bLineCount,
+	glog.Info("MatchCommonPrefix: ", aLineCount, " lines from A, ",
+		bLineCount, " lines from B, limit of ", limit,
 		chooseString(normalized, "; comparing normalized lines", ""),
-		chooseString(isContiguous, "; lines are not contiguous", ""))
+		chooseString(isContiguous, "; lines may not be contiguous", ""))
 
 	length := 0
 	var ai, bi int
@@ -77,10 +77,10 @@ func MatchCommonSuffix(aRange, bRange FileRange, normalized bool) (
 	limit := minInt(aLineCount, bLineCount)
 	isContiguous := aRange.IsContiguous() && bRange.IsContiguous()
 
-	glog.Infof("MatchCommonSuffix: %d lines from A, %d lines from B, limit of %d%s",
-		aLineCount, bLineCount,
+	glog.Info("MatchCommonSuffix: ", aLineCount, " lines from A, ",
+		bLineCount, " lines from B, limit of ", limit,
 		chooseString(normalized, "; comparing normalized lines", ""),
-		chooseString(isContiguous, "; lines are not contiguous", ""))
+		chooseString(isContiguous, "; lines may not be contiguous", ""))
 
 	length := 0
 	aOffset, bOffset := aLineCount-1, bLineCount-1

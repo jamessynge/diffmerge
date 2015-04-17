@@ -114,6 +114,7 @@ func (p *diffState) addBlockPair(bp *BlockPair) bool {
 	// overlapping existing BlockPairs. For now, just make sure we don't have
 	// fewer than zero lines remaining.
 	if bp != nil {
+		glog.Infof("addBlockPair: bp:\n%s", spew.Sdump(bp))
 		p.pairs = append(p.pairs, bp)
 		if bp.IsMove {
 			p.detectedAMove = true
@@ -124,7 +125,6 @@ func (p *diffState) addBlockPair(bp *BlockPair) bool {
 			glog.Fatalf("Adding BlockPair dropped a remaining count below zero!\n"+
 				"BlockPair: %v\ndiffState: %v", *bp, *p)
 		}
-
 		glog.Infof("addBlockPair: aRemainingCount=%d   bRemainingCount=%d",
 		p.aRemainingCount, p.bRemainingCount)
 	}
@@ -318,15 +318,31 @@ func (p *diffState) normalizedMatchCommonSuffix() bool {
 	return p.commonEndMatcher(MatchCommonSuffix, true)
 }
 
+func convertSliceIndicesToFileIndices(
+	aLines, bLines []LinePos, matches []BlockMatch) {
+	for n := range matches {
+		// Indices in aLines and bLines, respectively.
+		ai, bi := matches[n].AIndex, matches[n].BIndex
+
+		// Now line numbers in A and B.
+		ai, bi = aLines[ai].Index, bLines[bi].Index
+
+		matches[n].AIndex, matches[n].BIndex = ai, bi
+	}
+}
+
 func (p *diffState) matchWithMoves(
 	aLines, bLines []LinePos,
 	getHash func(lp LinePos) uint32) []BlockMatch {
+	glog.V(1).Info("matchWithMoves")
+
 	matches := BasicTichyMaximalBlockMoves(aLines, bLines, getHash)
 	return matches
 }
 
 func (p *diffState) linearMatch(
 	aLines, bLines []LinePos) []BlockMatch {
+	glog.V(1).Info("linearMatch")
 	var getSimilarity func(aIndex, bIndex int) float32
 	var normalizedSimilarity float32
 	if p.config.alignNormalizedLines {
@@ -358,7 +374,7 @@ func (p *diffState) linearMatch(
 	var result []BlockMatch
 	for _, ab := range abIndices {
 		ai, bi := ab.AIndex, ab.BIndex  // Indices in aLines and bLines, respectively.
-		ai, bi = aLines[ai].Index, bLines[bi].Index  // Now line numbers in A and B.
+//		ai, bi = aLines[ai].Index, bLines[bi].Index  // Now line numbers in A and B.
 		result = append(result, BlockMatch{
 			AIndex: ai,
 			BIndex: bi,
@@ -371,40 +387,83 @@ func (p *diffState) linearMatch(
 func (p *diffState) matchMiddle() {
 	// If we're here, then aRange and bRange contain the remaining lines to be
 	// matched.  Figure out the subset of lines we're going to be matching.
-
 	var aLines, bLines []LinePos
+	normalize := p.config.alignNormalizedLines
 	if p.config.alignRareLines {
 		aLines, bLines = FindRareLinesInRanges(
-			p.aRange, p.bRange, p.config.alignNormalizedLines,
+			p.aRange, p.bRange, normalize,
 			p.config.requireSameRarity, p.config.maxRareLineOccurrences)
+		glog.V(1).Info("matchMiddle found ", len(aLines), " rare lines in A, of ",
+				p.aRange.GetLineCount(), " middle lines")
+		glog.V(1).Info("matchMiddle found ", len(bLines), " rare lines in B, of ",
+				p.bRange.GetLineCount(), " middle lines")
 	} else {
 		selectAll := func(lp LinePos) bool { return true }
 		aLines = p.aRange.Select(selectAll)
 		bLines = p.bRange.Select(selectAll)
+		glog.V(1).Info("matchMiddle selected all ", len(aLines), " lines in A, and all ",
+			len(bLines), " lines in B")
 	}
 
 	// TODO Move rest of function into matchWithMoves and linearMatch,
 	// add helpers they can share as necessary.
 
-
-
+	// These return matches in terms of the indices of aLines and bLines, not
+	// the file indices, so they need to be converted afterwards.
 	var matches []BlockMatch
 	if p.config.detectBlockMoves {
-		getHash := SelectHashGetter(p.config.alignNormalizedLines)
+		getHash := SelectHashGetter(normalize)
 		matches = p.matchWithMoves(aLines, bLines, getHash)
 	} else {
 		matches = p.linearMatch(aLines, bLines)
 	}
 
-	// Convert these to BlockPairs
+	glog.V(1).Info("matchMiddle produced ", len(matches), " BlockMatches")
+
+	// Convert these to BlockPairs. Since they aren't necessarily contiguous,
+	// and there might be moves, we'll process them line by line, building
+	// BlockPairs that are contiguous.
+
+	convertIndices := func(ai, bi int) (aIndex, bIndex int) {
+		return aLines[ai].Index, bLines[bi].Index
+	}
+
+	SortBlockMatchesByAIndex(matches)
+	aLo, bLo := -100, -100
+	var pair, prevPair *BlockPair
+	for _, m := range matches {
+		ai, bi := convertIndices(m.AIndex, b.BIndex)
+		for n := 0; n < m.Length; n++ {
+
+
+		pair := &BlockPair{
+			AIndex:            ai,
+			ALength:           1,
+			BIndex:            bi,
+			BLength:           1,
+			IsMatch:           isExactMatch,
+			IsNormalizedMatch: !isExactMatch,
+			IsMove: isMove,
+		}
+
+
+
+	
+
+
+
+
 	if p.config.alignRareLines {
 		// They aren't necessarily contiguous, so make each matched line a separate
 		// entry, and combine them later if appropriate.
-		for _, m := range matches {
+		aLo, bLo := -100, -100
+			
+			isMove := m.AIndex < aLo || m.BIndex < bLo
+			aLo, bLo = m.AIndex, m.BIndex
 			for n := 0; n < m.Length; n++ {
 				ai := m.AIndex + n
 				bi := m.BIndex + n
-				isExactMatch := (!p.config.alignNormalizedLines ||
+				isExactMatch := (!normalize ||
 						p.aFile.GetHashOfLine(ai) == p.bFile.GetHashOfLine(bi))
 				pair := &BlockPair{
 					AIndex:            ai,
@@ -413,13 +472,29 @@ func (p *diffState) matchMiddle() {
 					BLength:           1,
 					IsMatch:           isExactMatch,
 					IsNormalizedMatch: !isExactMatch,
+					IsMove: isMove,
 				}
 				p.addBlockPair(pair)
 			}
 		}
 	} else {
+		aLo, bLo := -100, -100
 		for _, m := range matches {
-			p.addBlockMatch(m, p.config.alignNormalizedLines)
+			if m.AIndex < aLo || m.BIndex < bLo {
+				// A move must exist (or matches aren't in order!).
+				pair := &BlockPair{
+					AIndex:            m.AIndex,
+					ALength:           m.Length,
+					BIndex:            m.BIndex,
+					BLength:           m.Length,
+					IsMatch:           !normalize,
+					IsNormalizedMatch: normalize,
+					IsMove: true,
+				}
+				p.addBlockPair(pair)
+			} else {
+				p.addBlockMatch(m, p.config.alignNormalizedLines)
+			}
 		}
 	}
 }
