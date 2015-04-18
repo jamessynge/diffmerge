@@ -1,4 +1,5 @@
 package dm
+
 // Compute the Longest Common Sequence of Atoms, where Atom is an interface
 // allowing for comparison, while hiding the underlying "meaning".
 
@@ -10,14 +11,14 @@ import (
 // A and B of length aLength and bLength, respectively.
 // getSimilarity must return a value between 0 and 1, inclusive.
 func WeightedLCS(aLength, bLength int, getSimilarity func(aIndex, bIndex int) float32) (
-		result []IndexPair) {
+	result []IndexPair) {
 
 	// Convention: the first index of the table (related to positions in A) is
 	// called the up-down index (up is towards 0), and the second index is called
-	// the right-left index (left is towards 0). 
-	table := make([][]float32, aLength + 1)
+	// the right-left index (left is towards 0).
+	table := make([][]float32, aLength+1)
 	for i := range table {
-		table[i] = make([]float32, bLength + 1)
+		table[i] = make([]float32, bLength+1)
 	}
 
 	for aIndex := 0; aIndex < aLength; aIndex++ {
@@ -54,7 +55,7 @@ func WeightedLCS(aLength, bLength int, getSimilarity func(aIndex, bIndex int) fl
 			a--
 		} else if table[a][b] == table[a][b-1] {
 			b--
-		}	else {
+		} else {
 			a--
 			b--
 			result = append(result, IndexPair{a, b})
@@ -62,7 +63,7 @@ func WeightedLCS(aLength, bLength int, getSimilarity func(aIndex, bIndex int) fl
 	}
 
 	// Reverse the result.
-	for i, j := 0, len(result) - 1; i < j; {
+	for i, j := 0, len(result)-1; i < j; {
 		result[i], result[j] = result[j], result[i]
 		i++
 		j--

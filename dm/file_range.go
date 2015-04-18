@@ -46,7 +46,9 @@ type FileRange interface {
 }
 
 func FileRangeIsEmpty(p FileRange) bool {
-	if p == nil { return true }
+	if p == nil {
+		return true
+	}
 	return p.IsEmpty()
 }
 
@@ -77,11 +79,13 @@ func CreateFileRange(file *File, start, length int) FileRange {
 	}
 }
 
-func (p *fileRange) GetLineCount() int  {
-	if p == nil { return 0 }
+func (p *fileRange) GetLineCount() int {
+	if p == nil {
+		return 0
+	}
 	return p.length
 }
-func (p *fileRange) IsEmpty() bool { return p == nil || p.GetLineCount() == 0 }
+func (p *fileRange) IsEmpty() bool      { return p == nil || p.GetLineCount() == 0 }
 func (p *fileRange) IsContiguous() bool { return true }
 func (p *fileRange) GetStartLine() int  { return p.start }
 

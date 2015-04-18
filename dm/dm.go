@@ -70,4 +70,3 @@ type BlockPair struct {
 type IndexPair struct {
 	Index1, Index2 int
 }
-

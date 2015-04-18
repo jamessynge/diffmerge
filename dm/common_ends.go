@@ -7,7 +7,6 @@ import (
 type MatchCommonXFunc func(aRange, bRange FileRange, normalized bool) (
 	aRest, bRest FileRange, bp *BlockPair)
 
-
 // Find all lines at the start that are the same (the common prefix).
 // Produces at most one match; if normalized==true, then that match may
 // contain both full and normalized line matches (separating those will
@@ -142,8 +141,8 @@ func MatchCommonEnds(aRange, bRange FileRange, prefix, suffix, normalized bool) 
 	aRest, bRest FileRange, pairs []*BlockPair) {
 
 	glog.Infof("MatchCommonEnds A lines: %d; B lines: %d; prefix: %v; suffix: %v; normalized: %v",
-			aRange.GetLineCount(), bRange.GetLineCount(),
-			prefix, suffix, normalized)
+		aRange.GetLineCount(), bRange.GetLineCount(),
+		prefix, suffix, normalized)
 
 	if FileRangeIsEmpty(aRange) || FileRangeIsEmpty(bRange) {
 		// glog.Warning("Wasted call to MatchCommonEnds with emtpy range(s)")
@@ -154,7 +153,7 @@ func MatchCommonEnds(aRange, bRange FileRange, prefix, suffix, normalized bool) 
 		var bp *BlockPair
 		aRest, bRest, bp = matcher(aRange, bRange, normalized)
 		if bp == nil {
-			return false  // Assuming here that both ranges are non-empty.
+			return false // Assuming here that both ranges are non-empty.
 		}
 		pairs = append(pairs, bp)
 		if aRest == nil {
@@ -164,7 +163,7 @@ func MatchCommonEnds(aRange, bRange FileRange, prefix, suffix, normalized bool) 
 			before, after := aRange.GetLineCount(), aRest.GetLineCount()
 			if after != before {
 				glog.Infof("MatchCommonEnds: matched %d lines of %d, leaving %d  (aRange)",
-					before - after, before, after)
+					before-after, before, after)
 			}
 		}
 		if bRest == nil {
@@ -173,7 +172,7 @@ func MatchCommonEnds(aRange, bRange FileRange, prefix, suffix, normalized bool) 
 			before, after := bRange.GetLineCount(), bRest.GetLineCount()
 			if after != before {
 				glog.Infof("MatchCommonEnds: matched %d lines of %d, leaving %d  (bRange)",
-					before - after, before, after)
+					before-after, before, after)
 			}
 		}
 		return done

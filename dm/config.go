@@ -52,7 +52,6 @@ type DifferencerConfig struct {
 	// how similar are two normalized lines to be considered, where 0 is
 	// completely dissimilar, and 1 is equal.
 	lcsNormalizedSimilarity float64
-
 }
 
 func (p *DifferencerConfig) CreateFlags(f *flag.FlagSet) {

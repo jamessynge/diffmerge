@@ -4,8 +4,12 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/glog"
 )
+
+var _ = spew.Dump
+
 
 // Define BlockMatches U and V in matches to be "adjacent matches"
 // when there exist integers i and j such that:
@@ -384,24 +388,48 @@ func IsSentinal(p *BlockPair) bool {
 
 // Sort by AIndex or BIndex before calling CombineBlockPairs.
 func CombineBlockPairs(sortedInput []*BlockPair) (output []*BlockPair) {
+	if glog.V(1) {
+		glog.Info("CombineBlockPairs entry")
+		for n, pair := range sortedInput {
+			glog.Infof("CombineBlockPairs sortedInput[%d] = %v", n, pair)
+		}
+	}
+
 	output = append(output, sortedInput...)
 	// For each pair of consecutive BlockPairs, if they can be combined,
 	// combine them into the first of them.
-	u, v, limit := 0, 1, len(output)
+	u, v, limit, removed := 0, 1, len(output), 0
 	for v < limit {
 		j, k := output[u], output[v]
+
+		glog.Infof("CombineBlockPairs output[u=%d] = %v", u, j)
+		glog.Infof("CombineBlockPairs output[v=%d] = %v", v, k)
+
 		if BlockPairsAreSameType(j, k) && BlockPairsAreInOrder(j, k) && !IsSentinal(j) && !IsSentinal(k) {
 			glog.Infof("Combining BlockPairs:\n[%d]: %v\n[%d]: %v", u, *j, v, *k)
 			j.ALength += k.ALength
 			j.BLength += k.BLength
 			output[v] = nil
+			removed++
 		} else {
+			// BlockPairs can't be combined.
+			output[u+1] = k
 			u++
 		}
 		v++
 	}
-	glog.Infof("Removed %d BlockPairs", v-u-1)
-	return output[0 : u+1]
+	glog.Infof("Removed %d (= %d) BlockPairs", v-u-1, removed)
+
+	output = output[0 : u+1]
+	
+	if glog.V(1) {
+		glog.Info("CombineBlockPairs exit")
+		for n, pair := range output {
+			glog.Infof("CombineBlockPairs output[%d] = %v", n, pair)
+		}
+	}
+	
+	return output
 }
 
 // Sort by AIndex or BIndex before calling combinePairs.
@@ -445,7 +473,7 @@ func FormatInterleaved(pairs []*BlockPair, aIsPrimary bool, aFile, bFile *File,
 	maxDigits := DigitCount(maxInt(aFile.GetLineCount(), bFile.GetLineCount()))
 	inMove := false
 	for bn, bp := range pairs {
-		glog.Infof("FormatInterleaved processing %d: %v", bp)
+		glog.V(3).Infof("FormatInterleaved processing %d: %v", bp)
 		if bn != 0 {
 			fmt.Fprintln(w)
 		}
@@ -474,7 +502,7 @@ func FormatInterleaved(pairs []*BlockPair, aIsPrimary bool, aFile, bFile *File,
 		}
 
 		printLines := func(f *File, start, length int, prefix rune) error {
-			glog.Infof("printLines [%d, %d) of file %s", start, start+length, f.Name)
+			glog.V(3).Infof("printLines [%d, %d) of file %s", start, start+length, f.Name)
 
 			for n := start; n < start+length; n++ {
 				if printLineNumbers { // TODO Compute max width, use to right align.
