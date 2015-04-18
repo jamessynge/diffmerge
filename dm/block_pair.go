@@ -382,25 +382,31 @@ func IsSentinal(p *BlockPair) bool {
 	return p.AIndex < 0 || (p.ALength == 0 && p.BLength == 0)
 }
 
-// Sort by AIndex or BIndex before calling combinePairs.
-func (p *matchesToPairsState) combinePairs() {
+// Sort by AIndex or BIndex before calling CombineBlockPairs.
+func CombineBlockPairs(sortedInput []*BlockPair) (output []*BlockPair) {
+	output = append(output, sortedInput...)
 	// For each pair of consecutive BlockPairs, if they can be combined,
 	// combine them into the first of them.
-	u, v, limit := 0, 1, len(p.pairs)
+	u, v, limit := 0, 1, len(output)
 	for v < limit {
-		j, k := p.pairs[u], p.pairs[v]
+		j, k := output[u], output[v]
 		if BlockPairsAreSameType(j, k) && BlockPairsAreInOrder(j, k) && !IsSentinal(j) && !IsSentinal(k) {
 			glog.Infof("Combining BlockPairs:\n[%d]: %v\n[%d]: %v", u, *j, v, *k)
 			j.ALength += k.ALength
 			j.BLength += k.BLength
-			p.pairs[v] = nil
+			output[v] = nil
 		} else {
 			u++
 		}
 		v++
 	}
 	glog.Infof("Removed %d BlockPairs", v-u-1)
-	p.pairs = p.pairs[0 : u+1]
+	return output[0 : u+1]
+}
+
+// Sort by AIndex or BIndex before calling combinePairs.
+func (p *matchesToPairsState) combinePairs() {
+	p.pairs = CombineBlockPairs(p.pairs)
 }
 
 // Confused routine to create the blocks that we'll output, representing

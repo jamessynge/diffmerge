@@ -152,7 +152,7 @@ func MatchCommonEnds(aRange, bRange FileRange, prefix, suffix, normalized bool) 
 
 	tryMatch := func(matcher MatchCommonXFunc) (done bool) {
 		var bp *BlockPair
-		aRest, bRest, bp = fn(aRange, bRange, normalized)
+		aRest, bRest, bp = matcher(aRange, bRange, normalized)
 		if bp == nil {
 			return false  // Assuming here that both ranges are non-empty.
 		}
