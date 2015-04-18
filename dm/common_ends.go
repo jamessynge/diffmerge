@@ -4,6 +4,10 @@ import (
 	"github.com/golang/glog"
 )
 
+type MatchCommonXFunc func(aRange, bRange FileRange, normalized bool) (
+	aRest, bRest FileRange, bp *BlockPair)
+
+
 // Find all lines at the start that are the same (the common prefix).
 // Produces at most one match; if normalized==true, then that match may
 // contain both full and normalized line matches (separating those will
@@ -130,6 +134,59 @@ func MatchCommonSuffix(aRange, bRange FileRange, normalized bool) (
 	}
 	if length < bLineCount {
 		bRemaining = bRange.GetSubRange(0, length)
+	}
+	return
+}
+
+func MatchCommonEnds(aRange, bRange FileRange, prefix, suffix, normalized bool) (
+	aRest, bRest FileRange, pairs []*BlockPair) {
+
+	glog.Infof("MatchCommonEnds A lines: %d; B lines: %d; prefix: %v; suffix: %v; normalized: %v",
+			aRange.GetLineCount(), bRange.GetLineCount(),
+			prefix, suffix, normalized)
+
+	if FileRangeIsEmpty(aRange) || FileRangeIsEmpty(bRange) {
+		// glog.Warning("Wasted call to MatchCommonEnds with emtpy range(s)")
+		return aRange, bRange, nil
+	}
+
+	tryMatch := func(matcher MatchCommonXFunc) (done bool) {
+		var bp *BlockPair
+		aRest, bRest, bp = fn(aRange, bRange, normalized)
+		if bp == nil {
+			return false  // Assuming here that both ranges are non-empty.
+		}
+		pairs = append(pairs, bp)
+		if aRest == nil {
+			glog.Infof("MatchCommonEnds: matched ALL %d lines of aRange", aRange.GetLineCount())
+			done = true
+		} else {
+			before, after := aRange.GetLineCount(), aRest.GetLineCount()
+			if after != before {
+				glog.Infof("MatchCommonEnds: matched %d lines of %d, leaving %d  (aRange)",
+					before - after, before, after)
+			}
+		}
+		if bRest == nil {
+			glog.Infof("MatchCommonEnds: matched ALL %d lines of bRange", bRange.GetLineCount())
+		} else {
+			before, after := bRange.GetLineCount(), bRest.GetLineCount()
+			if after != before {
+				glog.Infof("MatchCommonEnds: matched %d lines of %d, leaving %d  (bRange)",
+					before - after, before, after)
+			}
+		}
+		return done
+	}
+	if prefix {
+		if tryMatch(MatchCommonPrefix) || !suffix {
+			// All done.
+			return
+		}
+		aRange, bRange = aRest, bRest
+	}
+	if suffix {
+		tryMatch(MatchCommonSuffix)
 	}
 	return
 }

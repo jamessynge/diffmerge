@@ -67,8 +67,12 @@ func CreateFileRange(file *File, start, length int) FileRange {
 	}
 }
 
+func (p *fileRange) GetLineCount() int  {
+	if p == nil { return 0 }
+	return p.length
+}
+func (p *fileRange) IsEmpty() bool { return p == nil || p.GetLineCount() == 0 }
 func (p *fileRange) IsContiguous() bool { return true }
-func (p *fileRange) GetLineCount() int  { return p.length }
 func (p *fileRange) GetStartLine() int  { return p.start }
 
 func (p *fileRange) GetLinePosRelative(offsetInRange int) LinePos {
