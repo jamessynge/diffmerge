@@ -9,7 +9,12 @@ import (
 // suffix lines of the files.
 
 type FileRange interface {
+	// Is the range made up of a sequence of adjacent lines (i.e. with no gaps,
+	// and no repeats)?
 	IsContiguous() bool
+
+	// Is the FileRange empty (GetLineCount() == 0)?
+	IsEmpty() bool
 
 	// Returns the number of lines in the range.
 	GetLineCount() int
@@ -38,6 +43,11 @@ type FileRange interface {
 
 	// Returns a new FileRange for the specified subset.
 	GetSubRange(startOffsetInRange, length int) FileRange
+}
+
+func FileRangeIsEmpty(p FileRange) bool {
+	if p == nil { return true }
+	return p.IsEmpty()
 }
 
 type fileRange struct {

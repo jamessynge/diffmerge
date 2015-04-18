@@ -29,6 +29,16 @@ func PerformDiff(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPa
 
 	glog.Info("PerformDiff entry, diffState:\n", p.SDumpToDepth(1))
 
+	if p.config.alignRareLines {
+		p.processOneRangePair()
+		p.config.alignRareLines = false
+	}
+
+	
+
+
+
+
 	if config.matchEnds {
 		if p.matchRangeEnds(/*prefix*/ true, /*suffix*/ true, /*normalize*/ false) {
 			// All matching done. The files must be equal.
@@ -102,6 +112,29 @@ type diffState struct {
 	// Controls operation.
 	config DifferencerConfig
 }
+
+func (p *diffState) processOneRangePair() {
+	if !FileRangeIsEmpty(p.aRange) && !FileRangeIsEmpty(p.bRange) {
+		if p.config.matchEnds {
+			if p.matchRangeEnds(/*prefix*/ true, /*suffix*/ true, /*normalize*/ false) {
+				return
+			}
+			if (p.config.matchNormalizedEnds &&
+			 		p.matchRangeEnds(/*prefix*/ true, /*suffix*/ true, /*normalize*/ true)) {
+				return
+			}
+		}
+	}
+
+	if !FileRangeIsEmpty(p.aRange) && !FileRangeIsEmpty(p.bRange) {
+		// Figure out an alignment of the remains after prefix and suffix matching.
+		// Note that if p.config.alignRareLines==true, then there may be matches
+		// in the range that we've not yet made, but can later.
+		p.matchRangeMiddle()
+	}
+}
+
+
 
 
 func (p *diffState) SDumpToDepth(depth int) string {
@@ -496,40 +529,6 @@ func (p *diffState) assertNoPairs() {
 	}
 }
 
-func (p *diffState) fillGapBetweenPairPair(aPair1, aPair2, bPair1, bPair2 *BlockPair) {
-	aStart, aLength := p.getGapBetweenAIndices(aPair1, aPair2)
-
-	i, ok := p.pair2BOrder[p1]
-	if !ok { panic("Where is the missing pair?") }
-	p3 := pairsByB[i]
-	var bs, bl int
-	bs = p3.BIndex + p3.BLength
-	if i >= limit {
-		bl = p.bFile.GetLineCount() - bs
-	} else {
-		p4 := pairsByB[i + 1]
-		bl = p4.BIndex - bs
-	}
-
-	if al <= 0 {
-		if bl <= 0 {
-			// There isn't a gap.
-			continue
-		}
-		// There is a gap in A only.
-		pair := &BlockPair{
-			AIndex:						ai,
-			ALength:					 bp.AIndex - ai,
-			BIndex:						bi,
-			BLength:					 0,
-			IsMatch:					 false,
-			IsMove:						false,
-			IsNormalizedMatch: false,
-		}
-}
-
-}
-
 func (p *diffState) computeGapInAWithB(aPair1, aPair2 *BlockPair,
 			matchAPair1ToB bool) (aStart, aLength, bStart, bLength int) {
 	if aPair1 == nil && aPair2 == nil {
@@ -616,22 +615,13 @@ func (p *diffState) processAllGapsInA(
 	}
 
 	// Now process each of these ranges.
+	for n := range aRanges {
+		p.aRange = aRanges[n]
+		p.bRange = bRanges[n]
+		processCurrentRanges()
+	}
 
-	var newPairs []*BlockPair
-
-
-
-
-
-
-
-
-	for n, limit := 0, len(p.pairs) - 1; n < limit; n++ {
-		p1, p2 := p.pairs[n], p.pairs[n + 1]
-		as, al := getGapBetweenAIndices(p1, p2)
-		if al
-
-
+	return len(aRanges)
 }
 
 
