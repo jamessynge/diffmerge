@@ -50,13 +50,17 @@ func PerformDiff(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPa
 	p.fillAllGaps()
 	glog.Info("PerformDiff filled gaps, diffState:\n", p.SDumpToDepth(1))
 
-	// TODO Need to combine adjacent BlockPairs of the same type.
-	p.sortPairsByB()
-	p.pairs = CombineBlockPairs(p.pairs)
+	if p.bRemainingCount > 0 {
+		panic("why are there remaining b gaps")
+	}
+
+	// Combine adjacent BlockPairs of the same type.
 	p.sortPairsByA()
 	p.pairs = CombineBlockPairs(p.pairs)
+	p.sortPairsByB()
+	p.pairs = CombineBlockPairs(p.pairs)
 
-	output := p.getPairsToReturn()
+	output := p.pairs
 
 	if glog.V(1) {
 		glog.Info("PerformDiff exit")

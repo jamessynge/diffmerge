@@ -480,7 +480,7 @@ func FormatInterleaved(pairs []*BlockPair, aIsPrimary bool, aFile, bFile *File,
 
 		stoppingMove := false
 		startingMove := false
-		if inMove && bp.IsMove {
+		if inMove && !bp.IsMove {
 			// Reached the end of a move (TODO make sure to update if meaning of
 			// IsMove changes, i.e. I figure out which set of blocks represents the
 			// small move).

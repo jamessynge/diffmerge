@@ -158,7 +158,7 @@ func main() {
 		toFile := ReadFileOrDie(flag.Arg(1))
 		pairs := dm.PerformDiff(fromFile, toFile, *diffConfig)
 		
-		dm.FormatInterleaved(pairs, true, fromFile, toFile, os.Stdout, true)
+		dm.FormatInterleaved(pairs, false, fromFile, toFile, os.Stdout, true)
 
 		if len(pairs) == 1 && pairs[0].IsMatch {
 			status = ConflictFree
