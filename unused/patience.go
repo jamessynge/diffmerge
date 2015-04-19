@@ -1,8 +1,18 @@
-package dm
+package unused
 
 import (
 	"github.com/golang/glog"
+
+	"github.com/jamessynge/diffmerge/dm"
 )
+
+func minInt(i, j int) int {
+	if i < j {
+		return i
+	} else {
+		return j
+	}
+}
 
 // Patience Diff, devised by Bram Cohen, focuses on the lines that are unique
 // within the files, rather than diff(1) which can be confused by the
@@ -31,8 +41,8 @@ import (
 //    common subsequence on those lines, matching them up.
 // 4) Do steps 1-2 on each section between matched lines.
 
-func matchCommonEnds(aLines, bLines []LinePos) (
-	commonEnds []BlockMatch, aMiddle, bMiddle []LinePos) {
+func matchCommonEnds(aLines, bLines []dm.LinePos) (
+	commonEnds []dm.BlockMatch, aMiddle, bMiddle []dm.LinePos) {
 
 	glog.Infof("matchCommonEnds: %d lines from A, %d lines from B", len(aLines), len(bLines))
 
@@ -57,7 +67,7 @@ func matchCommonEnds(aLines, bLines []LinePos) (
 	}
 	if length > 0 {
 		// There is a common prefix.
-		commonEnds = append(commonEnds, BlockMatch{
+		commonEnds = append(commonEnds, dm.BlockMatch{
 			AIndex: aLines[0].Index,
 			BIndex: bLines[0].Index,
 			Length: length,
@@ -91,7 +101,7 @@ func matchCommonEnds(aLines, bLines []LinePos) (
 		// There is a common suffix.
 		aOffset++
 		bOffset++
-		commonEnds = append(commonEnds, BlockMatch{
+		commonEnds = append(commonEnds, dm.BlockMatch{
 			AIndex: aLines[aOffset].Index,
 			BIndex: bLines[bOffset].Index,
 			Length: length,
@@ -107,19 +117,19 @@ type indicesAndHash struct {
 	hash                   uint32
 }
 
-func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
+func longestCommonSubsequenceOfRareLines(aLines, bLines []dm.LinePos,
 	aCounts, bCounts map[uint32]int, exactMatch bool, maxCount int) (
-	aLCSLines, bLCSLines []LinePos) {
+	aLCSLines, bLCSLines []dm.LinePos) {
 	// Determine which lines are equally rare (with fewer than maxCount
 	// occurrences) in the two sequences aLines and bLines.
 	// Decided to require the counts to be the same as this simplifies
 	// the reasoning about the possible matches.
 
 	normalized := ""
-	getHash := func(lp LinePos) uint32 { return lp.Hash }
+	getHash := func(lp dm.LinePos) uint32 { return lp.Hash }
 	if !exactMatch {
 		normalized = ", normalized"
-		getHash = func(lp LinePos) uint32 { return lp.NormalizedHash }
+		getHash = func(lp dm.LinePos) uint32 { return lp.NormalizedHash }
 	}
 
 	glog.Infof("longestCommonSubsequenceOfRareLines: %d lines from A, %d lines from B, %d is max count for rare lines%s", len(aLines), len(bLines), maxCount, normalized)
@@ -135,7 +145,7 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 		return
 	}
 
-	selector := func(lp LinePos) bool {
+	selector := func(lp dm.LinePos) bool {
 		return rareLineKeys[getHash(lp)]
 	}
 	aRareLines := selectLines(aLines, selector)
@@ -236,22 +246,22 @@ func longestCommonSubsequenceOfRareLines(aLines, bLines []LinePos,
 
 // Compute a longest common subsequence that has enough lines to be
 // trustworthy. We've already trimmed the common prefix and suffix.
-func getLongestCommonSubsequenceOfRareLines(aLines, bLines []LinePos) (
-	aLCSLines, bLCSLines []LinePos) {
+func getLongestCommonSubsequenceOfRareLines(aLines, bLines []dm.LinePos) (
+	aLCSLines, bLCSLines []dm.LinePos) {
 	minLinesSize := minInt(len(aLines), len(bLines))
 	glog.Infof("minLinesSize=%d", minLinesSize)
 	if minLinesSize == 0 {
 		return
 	}
 
-	aHashCounts := countLineOccurrences(aLines, GetLPHash)
-	bHashCounts := countLineOccurrences(bLines, GetLPHash)
+	aHashCounts := countLineOccurrences(aLines, dm.GetLPHash)
+	bHashCounts := countLineOccurrences(bLines, dm.GetLPHash)
 	minHashesSize := minInt(len(aHashCounts), len(bHashCounts))
 	glog.Infof("minHashesSize=%d", minHashesSize)
 
 	// TODO Delay computing this until we need it.
-	aNormalizedCounts := countLineOccurrences(aLines, GetLPNormalizedHash)
-	bNormalizedCounts := countLineOccurrences(bLines, GetLPNormalizedHash)
+	aNormalizedCounts := countLineOccurrences(aLines, dm.GetLPNormalizedHash)
+	bNormalizedCounts := countLineOccurrences(bLines, dm.GetLPNormalizedHash)
 	minNormalizedSize := minInt(len(aNormalizedCounts), len(bNormalizedCounts))
 	glog.Infof("minNormalizedSize=%d", minNormalizedSize)
 
@@ -292,8 +302,8 @@ func getLongestCommonSubsequenceOfRareLines(aLines, bLines []LinePos) (
 
 // If the lines immediately before those in the block move are identical,
 // then grow the block move by one and repeat.
-func (p *BlockMatch) GrowBackwards(aLines, bLines []LinePos) {
-	glog.Infof("GrowBackwards: BlockMatch = %v", *p)
+func GrowBackwards(p *dm.BlockMatch, aLines, bLines []dm.LinePos) {
+	glog.Infof("GrowBackwards: dm.BlockMatch = %v", *p)
 
 	aLimit, bLimit := aLines[0].Index, bLines[0].Index
 	glog.Infof("GrowBackwards aLimit=%d, bLimit=%d", aLimit, bLimit)
@@ -325,8 +335,8 @@ func (p *BlockMatch) GrowBackwards(aLines, bLines []LinePos) {
 
 // If the lines immediately after those in the block move are identical,
 // then grow the block move by one and repeat.
-func (p *BlockMatch) GrowForwards(aLines, bLines []LinePos) {
-	glog.Infof("GrowForwards: BlockMatch = %v", *p)
+func GrowForwards(p *dm.BlockMatch, aLines, bLines []dm.LinePos) {
+	glog.Infof("GrowForwards: dm.BlockMatch = %v", *p)
 
 	aLimit := aLines[len(aLines)-1].Index
 	bLimit := bLines[len(bLines)-1].Index
@@ -355,7 +365,7 @@ func (p *BlockMatch) GrowForwards(aLines, bLines []LinePos) {
 	p.Length += growBy
 }
 
-func BramCohensPatienceDiff(aFile, bFile *File) []BlockMatch {
+func BramCohensPatienceDiff(aFile, bFile *dm.File) []dm.BlockMatch {
 	commonEnds, aMiddle, bMiddle := matchCommonEnds(aFile.Lines, bFile.Lines)
 
 	aLCSLines, bLCSLines := getLongestCommonSubsequenceOfRareLines(
@@ -364,18 +374,18 @@ func BramCohensPatienceDiff(aFile, bFile *File) []BlockMatch {
 	glog.Infof("aLCSLines: %v", aLCSLines)
 	glog.Infof("bLCSLines: %v", bLCSLines)
 
-	var middleBlockMoves []BlockMatch
+	var middleBlockMoves []dm.BlockMatch
 	for lcsIndex := 0; lcsIndex < len(aLCSLines); {
-		bm := BlockMatch{
+		bm := dm.BlockMatch{
 			AIndex: aLCSLines[lcsIndex].Index,
 			BIndex: bLCSLines[lcsIndex].Index,
 			Length: 1,
 		}
-		bm.GrowBackwards(aMiddle, bMiddle)
-		bm.GrowForwards(aMiddle, bMiddle)
+		GrowBackwards(&bm, aMiddle, bMiddle)
+		GrowForwards(&bm, aMiddle, bMiddle)
 		// Has the block grown to consume any of the following LCS entries? If so,
 		// skip past them.
-		glog.Infof("Grew BlockMatch to %v", bm)
+		glog.Infof("Grew dm.BlockMatch to %v", bm)
 		beyondA := bm.AIndex + bm.Length
 		beyondB := bm.BIndex + bm.Length
 
@@ -406,7 +416,7 @@ func BramCohensPatienceDiff(aFile, bFile *File) []BlockMatch {
 	}
 
 	if len(commonEnds) == 2 {
-		var result []BlockMatch
+		var result []dm.BlockMatch
 		result = append(result, commonEnds[0])
 		result = append(result, middleBlockMoves...)
 		return append(result, commonEnds[1])

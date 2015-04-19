@@ -1,0 +1,27 @@
+void func0() {
+  w += 0
+  x += 0
+  y += 0
+  z += 0
+}
+
+void func1() {
+  w += 1
+  x += 1
+  y += 1
+  z += 1
+}
+
+void func2() {
+  w += 2
+  x += 2
+  y += 2
+  z += 2
+}
+
+void func3() {
+  w += 3
+  x += 3
+  y += 3
+  z += 3
+}

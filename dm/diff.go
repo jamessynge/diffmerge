@@ -21,6 +21,22 @@ import (
 // guaranteed of a match at the start, and then not worry about gap filling
 // before BOF or after EOF.
 
+// TODO Introduce two ordered data structures for storing the *BlockPair's,
+// one sorting by AIndex, the other by BIndex. This will eliminate all the
+// SortBlockPairsBy*Index calls.
+// We'll need the ability to:
+// * insert elements, perhaps with a hint (e.g. when splitting a BlockPair,
+//	 we might want to replace one entry with several);
+// * forward iterate over the members, tolerating modifications (e.g. filling
+//	 gaps while iterating, or splitting an entry);
+// * get the last member, and possibly the first;
+// * lookup members (e.g. when filling gaps by AIndex, we'll need to find
+//	 the neighbors of the BlockPair in B).
+// We might be able to start with a single BlockPair representing a mismatch
+// between the entirety of the two files, then we'd try to create matches within
+// that BlockPair. For easy of operations we might want to insert two other
+// BlockPairs (sentinals) marking the start and end of the two files.
+
 func PerformDiff(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPair) {
 	p := diffState{
 		aFile:      aFile,
@@ -71,18 +87,6 @@ func PerformDiff(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPa
 
 	return output
 }
-
-// TODO Introduce two ordered data structures for storing the *BlockPair's,
-// one sorting by AIndex, the other by BIndex. This will eliminate all the
-// SortBlockPairsBy*Index calls.
-// We'll need the ability to:
-// * insert elements, perhaps with a hint (e.g. when splitting a BlockPair,
-//	 we might want to replace one entry with several);
-// * forward iterate over the members, tolerating modifications (e.g. filling
-//	 gaps while iterating, or splitting an entry);
-// * get the last member, and possibly the first;
-// * lookup members (e.g. when filling gaps by AIndex, we'll need to find
-//	 the neighbors of the BlockPair in B).
 
 type diffState struct {
 	// Full files
@@ -143,13 +147,6 @@ func (p *diffState) SDumpToDepth(depth int) string {
 	return cs.Sdump(p)
 }
 
-func (p *diffState) isMatchingComplete() bool {
-	// This approach assumes that no lines will be copied.
-	// TODO Ideally we'd be able to detect copies, and even better would be
-	// to detect changes within the copies.
-	return /*p.aRemainingCount == 0 ||*/ p.bRemainingCount == 0
-}
-
 func (p *diffState) sortPairsByA() {
 	if !p.isSortedByA {
 		SortBlockPairsByAIndex(p.pairs)
@@ -166,9 +163,7 @@ func (p *diffState) sortPairsByB() {
 	}
 }
 
-// Returns false (stop) if one or both of the remaining counts drops to zero,
-// else returns true (keep going).
-func (p *diffState) addBlockPair(bp *BlockPair) bool {
+func (p *diffState) addBlockPair(bp *BlockPair) {
 	// TODO Add optional checking for validity: correct line indices, and not
 	// overlapping existing BlockPairs. For now, just make sure we don't have
 	// fewer than zero lines remaining.
@@ -200,33 +195,6 @@ func (p *diffState) addBlockPair(bp *BlockPair) bool {
 		glog.Infof("addBlockPair: bRemainingCount=%d",
 			p.bRemainingCount)
 	}
-	return p.isMatchingComplete()
-}
-
-func (p *diffState) addBlockMatch(m BlockMatch, normalizedMatch bool) bool {
-	// Convert to a BlockPair.	Not yet checking to see if the normalized match
-	// is also a full match, or may have some full match and some normalized match
-	// lines; will convert all of them later.
-	pair := &BlockPair{
-		AIndex:            m.AIndex,
-		ALength:           m.Length,
-		BIndex:            m.BIndex,
-		BLength:           m.Length,
-		IsMatch:           !normalizedMatch,
-		IsNormalizedMatch: normalizedMatch,
-	}
-	if glog.V(1) {
-		glog.Infof("addBlockMatch inserting: %v", *pair)
-	}
-	return p.addBlockPair(pair)
-}
-
-func (p *diffState) getPairsToReturn() []*BlockPair {
-	if p.bRemainingCount > 0 {
-		p.fillBGaps()
-	}
-	SortBlockPairsByAIndex(p.pairs)
-	return p.pairs
 }
 
 // Given the current state of p.aRange and p.bRange, attempt to shrink the
@@ -241,19 +209,6 @@ func (p *diffState) matchRangeEnds(prefix, suffix, normalized bool) (done bool) 
 		p.addBlockPair(pair)
 	}
 	return FileRangeIsEmpty(p.aRange) || FileRangeIsEmpty(p.bRange)
-}
-
-func convertSliceIndicesToFileIndices(
-	aLines, bLines []LinePos, matches []BlockMatch) {
-	for n := range matches {
-		// Indices in aLines and bLines, respectively.
-		ai, bi := matches[n].AIndex, matches[n].BIndex
-
-		// Now line numbers in A and B.
-		ai, bi = aLines[ai].Index, bLines[bi].Index
-
-		matches[n].AIndex, matches[n].BIndex = ai, bi
-	}
 }
 
 func (p *diffState) matchWithMoves(
@@ -306,6 +261,9 @@ func (p *diffState) linearMatch(
 	}
 	return result
 }
+
+// aRange and bRange contain lines to be matched; find matches between the
+// two ranges (exact or normalized, possible with moves or copies).
 
 func (p *diffState) matchRangeMiddle() {
 	// If we're here, then aRange and bRange contain the remaining lines to be
@@ -799,103 +757,3 @@ func (p *diffState) fillAllGaps() {
 	p.fillAGaps()
 	p.fillBGaps()
 }
-
-/*
-
-
-func (p *diffState) computeGapIn_Y_With_X_( _y_Pair1, _y_Pair2 *BlockPair,
-      match_Y_Pair1To_X_ bool) (_y_Start, _y_Length, _x_Start, _x_Length int) {
-  if _y_Pair1 == nil && _y_Pair2 == nil {
-    // There must be a complete mismatch between _Y_ and _X_ so far.
-    p.assertNoPairs()
-    return 0, p._y_File.GetLineCount(), 0, p._x_File.GetLineCount()
-  }
-  _y_Start, _y_Length = p.getGapBetween_Y_Indices( _y_Pair1, _y_Pair2)
-  if _y_Length == 0 {
-    // There is no gap in _Y_.
-    return
-  }
-
-  var _x_Pair1, _x_Pair2 *BlockPair
-  if match_Y_Pair1To_X_ {
-    if _y_Pair1 != nil {
-      _x_Pair1 = _y_Pair1
-      i, ok := p.pair2_X_Order[ _y_Pair1]
-      if !ok {
-        glog.Fatalf("Expected to find pair %v in pair2_X_Order!", * _y_Pair1)
-      }
-      if i + 1 < len(p.pairsBy_X_) {
-        _x_Pair2 = p.pairsBy_X_[i + 1]
-      }
-    } else {
-      _x_Pair2 = p.pair2_X_Order[0]
-    }
-  } else {
-    // !match_Y_Pair1To_X_, i.e. match _y_Pair2 to _X_
-    if _y_Pair2 != nil {
-      _x_Pair2 = _y_Pair2
-      i, ok := p.pair2_X_Order[ _y_Pair2]
-      if !ok {
-        glog.Fatalf("Expected to find pair %v in pair2_X_Order!", * _y_Pair2)
-      }
-      if i > 0 {
-        _x_Pair1 = p.pairsBy_X_[i - 1]
-      }
-    } else {
-      _x_Pair2 = p.pair2_X_Order[0]
-    }
-  }
-  _x_Start, _x_Length = getGapBetween_X_Indices(_x_Pair1, _x_Pair2)
-  return
-}
-
-func (p *diffState) processGapIn_Y_( _y_Pair1, _y_Pair2 *BlockPair,
-      match_Y_Pair1To_X_ bool, processCurrentRanges func()) {
-  _y_Start, _y_Length, _x_Start, _x_Length := p.computeGapIn_Y_With_X_(
-      _y_Pair1, _y_Pair2, match_Y_Pair1To_X_)
-
-  if _y_Length == 0 { return }
-
-  p._y_Range = CreateFileRange(p._y_File, _y_Start, _y_Length)
-  p._x_Range = CreateFileRange(p._x_File, _x_Start, _x_Length)
-
-  processCurrentRanges()
-}
-
-func (p *diffState) processAllGapsIn_Y_(
-    match_Y_Pair1To_X_ bool, processCurrentRanges func()) {
-  // TODO Handle detecting copies so that we can figure out if we need to allow
-  // _Y_ lines that have been copied to be matched up with multiple _X_ lines.
-  // Or possibly vice versa, but that doesn't make sense if we assume that
-  // _Y_ represents a base version and _X_ represents a derived version, though
-  // that isn't the only diff use cases.
-
-  // Create an index of BlockPairs sorted by _X_.
-  p.pairsBy_X_, p.pair2_X_Order = make_X_OrderIndex(p.pairs)
-
-  // Find gaps in _Y_, and create ranges for each.
-  p.sortPairsBy_Y_()
-  var _y_Ranges, _x_Ranges []FileRange
-
-  var prev_Y_Pair *BlockPair
-  for _, this_Y_Pair := range p.pairs {
-    _y_Start, _y_Length, _x_Start, _x_Length := p.computeGapIn_Y_With_X_(
-        _y_Pair1, _y_Pair2, match_Y_Pair1To_X_)
-    prev_Y_Pair = this_Y_Pair
-
-    if _y_Length == 0 { continue }
-    _y_Ranges = append( _y_Ranges, CreateFileRange(p._y_File, _y_Start, _y_Length))
-    _x_Ranges = append(_x_Ranges, CreateFileRange(p._x_File, _x_Start, _x_Length))
-  }
-
-  // Now process each of these ranges.
-  for n := range _y_Ranges {
-    p._y_Range = _y_Ranges[n]
-    p._x_Range = _x_Ranges[n]
-    processCurrentRanges()
-  }
-
-  return len( _y_Ranges)
-}
-
-*/

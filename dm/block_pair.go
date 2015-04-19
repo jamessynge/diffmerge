@@ -19,6 +19,12 @@ var _ = spew.Dump
 // two, rather than there being a likelihood that the gap between the
 // two represents a move.
 
+func BlockPairsAreInOrder(p, o *BlockPair) bool {
+	nextA := p.AIndex + p.ALength
+	nextB := p.BIndex + p.BLength
+	return nextA == o.AIndex && nextB == o.BIndex
+}
+
 // TODO Experiment with how block COPIES are handled; Not sure these are
 // remotely correct yet.
 
@@ -26,16 +32,9 @@ func BlockPairsAreSameType(p, o *BlockPair) bool {
 	return p.IsMatch == o.IsMatch && p.IsNormalizedMatch == o.IsNormalizedMatch
 }
 
-func BlockPairsAreInOrder(p, o *BlockPair) bool {
-	nextA := p.AIndex + p.ALength
-	nextB := p.BIndex + p.BLength
-	return nextA == o.AIndex && nextB == o.BIndex
-}
-
 func IsSentinal(p *BlockPair) bool {
 	return p.AIndex < 0 || (p.ALength == 0 && p.BLength == 0)
 }
-
 
 func (p *BlockPair) markAsIdenticalMatch() {
 	p.IsMatch = true
@@ -52,7 +51,7 @@ func (p *BlockPair) markAsMismatch() {
 	p.IsNormalizedMatch = false
 }
 
-func (p *BlockPair) IsSentinal() bool{
+func (p *BlockPair) IsSentinal() bool {
 	return p.AIndex < 0 || (p.ALength == 0 && p.BLength == 0)
 }
 
