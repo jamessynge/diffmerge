@@ -85,6 +85,16 @@ import (
 var (
 	pDiff3Flag = flag.Bool(
 		"diff3", false, "Find difference between 3 files.")
+
+	pStatusOnlyFlag = flag.Bool(
+		"brief", false, "Report (via exit code) whether there were differences "+
+			" (for diff) or conflicts (for diff3/merge) found.")
+
+	pSideBySideFlag = flag.Bool(
+		"side-by-side", true, "For diff of two files, display results side-by-side.")
+
+	pOutputColumns = flag.Int(
+		"output-columns", 80, "How many columns does the output device have?")
 )
 
 func ReadFileOrDie(name string) *dm.File {
@@ -97,26 +107,6 @@ func ReadFileOrDie(name string) *dm.File {
 	return f
 }
 
-func ComputeBlockPairs(fromFile, toFile *dm.File) []*dm.BlockPair {
-	bms := dm.BramCohensPatienceDiff(fromFile, toFile)
-
-	glog.Info("Initial matches found:")
-	for n, bm := range bms {
-		glog.Infof("%d: %v", n, bm)
-	}
-	glog.Infoln()
-
-	pairs := dm.BlockMatchesToBlockPairs(fromFile, toFile, bms)
-
-	glog.Info("BlockPairs:")
-	for n, pair := range pairs {
-		glog.Infof("%d: %v", n, pair)
-	}
-	glog.Infoln()
-
-	return pairs
-}
-
 type CmdStatus int
 
 const (
@@ -125,17 +115,6 @@ const (
 	AnError
 )
 
-func Diff2Files(fromFile, toFile *dm.File) CmdStatus {
-	pairs := ComputeBlockPairs(fromFile, toFile)
-
-	dm.FormatInterleaved(pairs, true, fromFile, toFile, os.Stdout, true)
-
-	if len(pairs) == 1 && pairs[0].IsMatch {
-		return ConflictFree
-	} else {
-		return SomeConflicts
-	}
-}
 func Diff3Files(yours, origin, theirs *dm.File) CmdStatus {
 	return AnError
 }
@@ -157,16 +136,21 @@ func main() {
 		fromFile := ReadFileOrDie(flag.Arg(0))
 		toFile := ReadFileOrDie(flag.Arg(1))
 		pairs := dm.PerformDiff(fromFile, toFile, *diffConfig)
-		
-		dm.FormatInterleaved(pairs, false, fromFile, toFile, os.Stdout, true)
-
 		if len(pairs) == 1 && pairs[0].IsMatch {
 			status = ConflictFree
 		} else {
 			status = SomeConflicts
 		}
-		
-//		status = Diff2Files(fromFile, toFile)
+
+		glog.Flush()
+
+		if *pSideBySideFlag {
+			sxsCfg := dm.DefaultSideBySideConfig
+			sxsCfg.DisplayColumns = *pOutputColumns
+			dm.FormatSideBySide(fromFile, toFile, pairs, false, os.Stdout, sxsCfg)
+		} else {
+			dm.FormatInterleaved(pairs, false, fromFile, toFile, os.Stdout, true)
+		}
 
 	case 3:
 		yours := ReadFileOrDie(flag.Arg(0))

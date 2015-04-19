@@ -75,7 +75,7 @@ func findLineWithIndex(lines []LinePos, index int) int {
 			return mid
 		}
 	}
-	log.Fatalf("Failed to find line with index %s in:\n%v", index, lines)
+	log.Fatalf("Failed to find line with index %d in:\n%v", index, lines)
 	return -1
 }
 

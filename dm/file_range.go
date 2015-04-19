@@ -68,7 +68,7 @@ type fileRange struct {
 
 func CreateFileRange(file *File, start, length int) FileRange {
 	if start < 0 || start+length > file.GetLineCount() {
-		glog.Fatal("New range (%d, +%d) is invalid (max length %d)",
+		glog.Fatalf("New range (%d, +%d) is invalid (max length %d)",
 			start, length, file.GetLineCount())
 	}
 	return &fileRange{
@@ -139,7 +139,7 @@ func (p *fileRange) Select(fn func(lp LinePos) bool) []LinePos {
 
 func (p *fileRange) GetSubRange(startOffsetInRange, length int) FileRange {
 	if startOffsetInRange < 0 || startOffsetInRange+length > p.length {
-		glog.Fatal("New range (%d, +%d) is invalid (max length %d)",
+		glog.Fatalf("New range (%d, +%d) is invalid (max length %d)",
 			startOffsetInRange, length, p.length)
 	}
 	if startOffsetInRange == 0 && length == p.length {
