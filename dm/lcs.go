@@ -1,8 +1,5 @@
 package dm
 
-// Compute the Longest Common Sequence of Atoms, where Atom is an interface
-// allowing for comparison, while hiding the underlying "meaning".
-
 import (
 	"github.com/golang/glog"
 )
