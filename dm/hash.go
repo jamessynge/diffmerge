@@ -11,6 +11,7 @@ import (
 
 type LineHasher interface {
 	Compute(line []byte) (fullHash, normalizedHash uint32)
+	Compute2(line, normalizedLine []byte) (fullHash, normalizedHash uint32)
 }
 
 type HashPositions map[uint32][]int
@@ -77,6 +78,15 @@ func (p *lineHasher) Compute(line []byte) (fullHash, normalizedHash uint32) {
 		if len(line) > 0 {
 			normalizedHash = p.hn.Hash(line)
 		}
+	}
+	return
+}
+func (p *lineHasher) Compute2(line, normalizedLine []byte) (fullHash, normalizedHash uint32) {
+	if len(line) > 0 {
+		fullHash = p.hf.Hash(line)
+	}
+	if len(normalizedLine) > 0 {
+		normalizedHash = p.hn.Hash(line)
 	}
 	return
 }

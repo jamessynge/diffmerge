@@ -412,6 +412,7 @@ func (p *diffState) rangeToBlockPairs() (newPairs []*BlockPair) {
 	var aLines, bLines []LinePos
 	normalize := p.config.alignNormalizedLines
 	if p.config.alignRareLines {
+		// TODO Change to make use of LinePos.CountInFile and LinePos.ProbablyCommon.
 		aLines, bLines = FindRareLinesInRanges(
 			p.aRange, p.bRange, normalize,
 			p.config.requireSameRarity, p.config.maxRareLineOccurrences)

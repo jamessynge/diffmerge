@@ -46,6 +46,13 @@ type LinePos struct {
 	//   or maybe completely removed
 	// * convert all letters characters to a single case (very aggressive)
 	NormalizedHash uint32
+
+	// Count of the normalized hash in the file.
+  // Maximum is 255, but that is OK for rare-ness checking.
+  CountInFile uint8
+
+	// Is this a well known common line (e.g. "/*" or "#", or an empty line).
+	ProbablyCommon bool  // Based solely on normalized content, not other lines.
 }
 
 // Represents a match between files A and B.

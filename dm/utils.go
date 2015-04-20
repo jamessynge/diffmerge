@@ -170,9 +170,34 @@ func FormatLineNum(i, maxDigits int) string {
 	return fmt.Sprintf("%*d", maxDigits, i)
 }
 
+func removeIndent(line []byte) []byte {
+	line = bytes.TrimLeft(line, " \t")
+	return line
+}
+
 func normalizeLine(line []byte) []byte {
 	line = bytes.TrimSpace(line)
 	// TODO Maybe collapse multiple spaces inside line, maybe remove all
 	// spaces, maybe normalize case.
 	return line
+}
+
+var wellKnownCommonLines map[string]bool
+func init() {
+	wellKnownCommonLines["//"] = true
+	wellKnownCommonLines["/*"] = true
+	wellKnownCommonLines["*"] = true
+	wellKnownCommonLines["*/"] = true
+	wellKnownCommonLines["#"] = true
+	wellKnownCommonLines["("] = true
+	wellKnownCommonLines[")"] = true
+	wellKnownCommonLines["{"] = true
+	wellKnownCommonLines["}"] = true
+	wellKnownCommonLines["["] = true
+	wellKnownCommonLines["]"] = true
+}
+
+func computeIsProbablyCommon(normalizedLine []byte) bool {
+	if len(normalizedLine) >= 3 { return false }
+	return wellKnownCommonLines[string(normalizedLine)]
 }

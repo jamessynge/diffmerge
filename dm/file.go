@@ -90,13 +90,20 @@ func ReadFile(name string) (*File, error) {
 		if line != nil {
 			index := len(p.Lines)
 			length := len(line)
-			hash, normalizedHash := hasher.Compute(line)
+			unindentedLine := removeIndent(line)
+			hash, normalizedHash := hasher.Compute2(line, unindentedLine)
+			probablyCommon := len(unindentedLine) == 0
+			if !probablyCommon {
+				normalizedLine := normalizeLine(unindentedLine)
+				probablyCommon = computeIsProbablyCommon(normalizedLine)
+			}
 			p.Lines = append(p.Lines, LinePos{
 				Start:          pos,
 				Length:         length,
 				Index:          index,
 				Hash:           hash,
 				NormalizedHash: normalizedHash,
+				ProbablyCommon: probablyCommon,
 			})
 			//			p.Counts[hash]++
 			pos += length
@@ -107,6 +114,22 @@ func ReadFile(name string) (*File, error) {
 			return nil, err
 		}
 	}
+
+	// Compute LinePos.CountInFile values.
+	counts := make(map[uint32]int)
+	for n := range p.Lines {
+		counts[p.Lines[n].NormalizedHash]++
+	}
+	for n := range p.Lines {
+		lp := &p.Lines[n]
+		count := counts[lp.NormalizedHash]
+		if count > 255 {
+			lp.CountInFile = 255
+		} else {
+			lp.CountInFile = uint8(count)
+		}
+	}
+
 	p.fullRange = CreateFileRange(p, 0, p.GetLineCount())
 	return p, nil
 }
