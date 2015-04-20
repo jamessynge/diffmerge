@@ -19,13 +19,6 @@ void func2() {
   z += 2
 }
 
-void func1() {
-  w += 1
-  x += 1
-  y += 1
-  z += 1
-}
-
 void func3() {
   w += 3
   x += 3

@@ -52,13 +52,41 @@ func PerformDiff(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPa
 
 	glog.Info("PerformDiff entry, diffState:\n", p.SDumpToDepth(1))
 
-	if p.config.alignRareLines {
-		p.processOneRangePair()
-		glog.Info("PerformDiff processed rare lines, diffState:\n", p.SDumpToDepth(1))
-		p.config.alignRareLines = false
+	if true {
+		// Experiment in an effort to better handle moves followed by edits, and
+		// also copies (possibly followed by edits):
+		// 1) Match common prefix and suffix.
+		// 2) Align rare lines with LCS.
+		// 3) Extend common prefix and suffix of the LCS entries, with no overlap
+		//    (i.e. so far there can be no copies, so there can only be 1-to-1
+		//    matches between A and B lines, or no match at all).
+		// 4) If there are long-ish insertions (not changes) in B remaining,
+		//		attempt to match those one at a time with the entirety of A. If we
+		//    get a good match, then we can create BlockPair(s) for the match,
+		//    multiple if there are both matches (exacted and/or normalized) and
+		//    changes. An advantage of this approach is that we can readily
+		//    identify where there are moves and where there are copies.
+		// 5) TODO in a future experiment: if there are changes where there are
+		//    significantly more lines in B than A, we can do sub-line LCS to see
+		//    if we can identify where there might be an insertion among the
+		//    B lines, rather than just edits, and then attempt to match just that
+		//    portion with A.
+
+		p.exp_phase1_ends()
+
+		p.exp_phase2_and_3_lcs()
+
+	} else {
+
+		if p.config.alignRareLines {
+			p.processOneRangePair()
+			glog.Info("PerformDiff processed rare lines, diffState:\n", p.SDumpToDepth(1))
+			p.config.alignRareLines = false
+		}
+		p.processAllGapsInB(true, func() { p.processOneRangePair() })
+		glog.Info("PerformDiff processed gaps in B, diffState:\n", p.SDumpToDepth(1))
+
 	}
-	p.processAllGapsInB(true, func() { p.processOneRangePair() })
-	glog.Info("PerformDiff processed gaps in B, diffState:\n", p.SDumpToDepth(1))
 
 	p.splitMixedMatches()
 	glog.Info("PerformDiff split mixed matches, diffState:\n", p.SDumpToDepth(1))
@@ -118,6 +146,72 @@ type diffState struct {
 
 	// Controls operation.
 	config DifferencerConfig
+}
+
+// Do exact and approximate matching at the start and end of the full ranges.
+func (p *diffState) exp_phase1_ends() {
+	p.assertNoPairs()
+
+	if !FileRangeIsEmpty(p.aRange) && !FileRangeIsEmpty(p.bRange) {
+		if p.matchRangeEnds( /*prefix*/ true /*suffix*/, true /*normalize*/, false) {
+			return
+		}
+		if p.config.matchNormalizedEnds &&
+			p.matchRangeEnds( /*prefix*/ true /*suffix*/, true /*normalize*/, true) {
+			return
+		}
+	}
+}
+
+// Match the middle (not the common ends) using LCS, then extend.
+func (p *diffState) exp_phase2_and_3_lcs() {
+	var cfg DifferencerConfig = p.config
+	defer func() {
+		p.config = cfg
+	}()
+	p.config.detectBlockMoves = false
+	p.config.matchEnds = true
+	p.config.matchNormalizedEnds = p.config.alignNormalizedLines
+
+	p.matchRangeMiddle()
+
+	if p.config.alignRareLines {
+		p.config.alignRareLines = false
+		p.processAllGapsInB(true, func() { p.processOneRangePair() })
+	}
+}
+
+func (p *diffState) exp_phase5_moves_and_copies() {
+	var cfg DifferencerConfig = p.config
+	defer func() {
+		p.config = cfg
+	}()
+	p.config.detectBlockMoves = false
+	p.config.matchEnds = false
+
+	var newPairs []*BlockPair
+
+	minExtraBLinesForProcessing := 5
+
+	p.processAllGapsInB(true, func() {
+		extraBLines := p.bRange.GetLineCount() - p.aRange.GetLineCount()
+		if extraBLines < minExtraBLinesForProcessing {
+			return
+		}
+		// Match p.bRange to all of A.
+		p.aRange = p.aFullRange
+		somePairs := p.rangeToBlockPairs()
+		if len(somePairs) == 0 {
+			return
+		}
+
+		// TODO Decide if these pairs are worth accepting; i.e. several matches of
+		// empty lines in various parts of A aren't useful; we're looking for a
+		// tight match, showing that a move or copy has occurred.
+
+		glog.V(1).Info("exp_phase5_moves_and_copies found ", len(newPairs),
+			" BlockPairs while matching a gap with ", extraBLines, " extra lines in B")
+	})
 }
 
 func (p *diffState) processOneRangePair() {
@@ -262,45 +356,9 @@ func (p *diffState) linearMatch(
 	return result
 }
 
-// aRange and bRange contain lines to be matched; find matches between the
-// two ranges (exact or normalized, possible with moves or copies).
-
-func (p *diffState) matchRangeMiddle() {
-	// If we're here, then aRange and bRange contain the remaining lines to be
-	// matched.	Figure out the subset of lines we're going to be matching.
-	var aLines, bLines []LinePos
-	normalize := p.config.alignNormalizedLines
-	if p.config.alignRareLines {
-		aLines, bLines = FindRareLinesInRanges(
-			p.aRange, p.bRange, normalize,
-			p.config.requireSameRarity, p.config.maxRareLineOccurrences)
-		glog.V(1).Info("matchRangeMiddle found ", len(aLines), " rare lines in A, of ",
-			p.aRange.GetLineCount(), " middle lines")
-		glog.V(1).Info("matchRangeMiddle found ", len(bLines), " rare lines in B, of ",
-			p.bRange.GetLineCount(), " middle lines")
-	} else {
-		selectAll := func(lp LinePos) bool { return true }
-		aLines = p.aRange.Select(selectAll)
-		bLines = p.bRange.Select(selectAll)
-		glog.V(1).Info("matchRangeMiddle selected all ", len(aLines), " lines in A, and all ",
-			len(bLines), " lines in B")
-	}
-
-	// TODO Move rest of function into matchWithMoves and linearMatch,
-	// add helpers they can share as necessary.
-
-	// These return matches in terms of the indices of aLines and bLines, not
-	// the file indices, so they need to be converted afterwards.
-	var matches []BlockMatch
-	if p.config.detectBlockMoves {
-		getHash := SelectHashGetter(normalize)
-		matches = p.matchWithMoves(aLines, bLines, getHash)
-	} else {
-		matches = p.linearMatch(aLines, bLines, normalize)
-	}
-
-	glog.V(1).Info("matchRangeMiddle produced ", len(matches), " BlockMatches")
-
+func (p *diffState) convertMatchesToBlockPairs(
+	aLines, bLines []LinePos, normalize bool, matches []BlockMatch) (
+	newPairs []*BlockPair) {
 	// Convert these to BlockPairs. Since they aren't necessarily contiguous,
 	// and there might be moves, we'll process them line by line, building
 	// BlockPairs that are contiguous.
@@ -309,7 +367,7 @@ func (p *diffState) matchRangeMiddle() {
 		return aLines[ai].Index, bLines[bi].Index
 	}
 
-	SortBlockMatchesByAIndex(matches)
+	SortBlockMatchesByBIndex(matches)
 	var prevPair *BlockPair
 	for i, m := range matches {
 		glog.V(1).Infof("matches[%d] = %v", i, m)
@@ -328,7 +386,7 @@ func (p *diffState) matchRangeMiddle() {
 					continue
 				}
 				// No, so add pair and start a new one.
-				p.addBlockPair(pair)
+				newPairs = append(newPairs, pair)
 				prevPair = pair
 			}
 			isMove := prevPair != nil && (prevPair.AIndex+prevPair.ALength > ai || prevPair.BIndex+prevPair.BLength > bi)
@@ -342,8 +400,64 @@ func (p *diffState) matchRangeMiddle() {
 				IsMove:            isMove,
 			}
 		}
-		p.addBlockPair(pair)
+		newPairs = append(newPairs, pair)
 		prevPair = pair
+	}
+	return
+}
+
+func (p *diffState) rangeToBlockPairs() (newPairs []*BlockPair) {
+	// If we're here, then aRange and bRange contain the remaining lines to be
+	// matched.	Figure out the subset of lines we're going to be matching.
+	var aLines, bLines []LinePos
+	normalize := p.config.alignNormalizedLines
+	if p.config.alignRareLines {
+		aLines, bLines = FindRareLinesInRanges(
+			p.aRange, p.bRange, normalize,
+			p.config.requireSameRarity, p.config.maxRareLineOccurrences)
+		glog.V(1).Info("rangeToBlockPairs found ", len(aLines), " rare lines in A, of ",
+			p.aRange.GetLineCount(), " middle lines")
+		glog.V(1).Info("rangeToBlockPairs found ", len(bLines), " rare lines in B, of ",
+			p.bRange.GetLineCount(), " middle lines")
+		if len(aLines) == 0 || len(bLines) == 0 {
+			return
+		}
+	} else {
+		selectAll := func(lp LinePos) bool { return true }
+		aLines = p.aRange.Select(selectAll)
+		bLines = p.bRange.Select(selectAll)
+		glog.V(1).Info("rangeToBlockPairs selected all ", len(aLines),
+			" lines in A, and all ", len(bLines), " lines in B")
+	}
+
+	// These return matches in terms of the indices of aLines and bLines, not
+	// the file indices, so they need to be converted afterwards.
+	var matches []BlockMatch
+	if p.config.detectBlockMoves {
+		getHash := SelectHashGetter(normalize)
+		matches = p.matchWithMoves(aLines, bLines, getHash)
+	} else {
+		matches = p.linearMatch(aLines, bLines, normalize)
+	}
+
+	glog.V(1).Info("rangeToBlockPairs produced ", len(matches), " BlockMatches")
+
+	newPairs = p.convertMatchesToBlockPairs(aLines, bLines, normalize, matches)
+
+	glog.V(1).Info("rangeToBlockPairs produced ", len(newPairs), " BlockPairs")
+
+	return
+}
+
+// aRange and bRange contain lines to be matched; find matches between the
+// two ranges (exact or normalized, possible with moves or copies).
+func (p *diffState) matchRangeMiddle() {
+	newPairs := p.rangeToBlockPairs()
+
+	glog.V(1).Info("matchRangeMiddle adding ", len(newPairs), " BlockPairs")
+
+	for _, pair := range newPairs {
+		p.addBlockPair(pair)
 	}
 }
 
