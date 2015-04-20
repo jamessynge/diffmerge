@@ -38,6 +38,8 @@ import (
 // BlockPairs (sentinals) marking the start and end of the two files.
 
 func PerformDiff(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPair) {
+	defer glog.Flush()
+
 	p := diffState{
 		aFile:      aFile,
 		bFile:      bFile,
@@ -52,40 +54,44 @@ func PerformDiff(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPa
 
 	glog.Info("PerformDiff entry, diffState:\n", p.SDumpToDepth(1))
 
-	if true {
-		// Experiment in an effort to better handle moves followed by edits, and
-		// also copies (possibly followed by edits):
-		// 1) Match common prefix and suffix.
-		// 2) Align rare lines with LCS.
-		// 3) Extend common prefix and suffix of the LCS entries, with no overlap
-		//    (i.e. so far there can be no copies, so there can only be 1-to-1
-		//    matches between A and B lines, or no match at all).
-		// 4) If there are long-ish insertions (not changes) in B remaining,
-		//		attempt to match those one at a time with the entirety of A. If we
-		//    get a good match, then we can create BlockPair(s) for the match,
-		//    multiple if there are both matches (exacted and/or normalized) and
-		//    changes. An advantage of this approach is that we can readily
-		//    identify where there are moves and where there are copies.
-		// 5) TODO in a future experiment: if there are changes where there are
-		//    significantly more lines in B than A, we can do sub-line LCS to see
-		//    if we can identify where there might be an insertion among the
-		//    B lines, rather than just edits, and then attempt to match just that
-		//    portion with A.
+	if !p.someRangeIsEmpty() {
+		if true {
+			// Experiment in an effort to better handle moves followed by edits, and
+			// also copies (possibly followed by edits):
+			// 1) Match common prefix and suffix.
+			// 2) Align rare lines with LCS.
+			// 3) Extend common prefix and suffix of the LCS entries, with no overlap
+			//    (i.e. so far there can be no copies, so there can only be 1-to-1
+			//    matches between A and B lines, or no match at all).
+			// 4) If there are long-ish insertions (not changes) in B remaining,
+			//		attempt to match those one at a time with the entirety of A. If we
+			//    get a good match, then we can create BlockPair(s) for the match,
+			//    multiple if there are both matches (exacted and/or normalized) and
+			//    changes. An advantage of this approach is that we can readily
+			//    identify where there are moves and where there are copies.
+			// 5) TODO in a future experiment: if there are changes where there are
+			//    significantly more lines in B than A, we can do sub-line LCS to see
+			//    if we can identify where there might be an insertion among the
+			//    B lines, rather than just edits, and then attempt to match just that
+			//    portion with A.
 
-		p.exp_phase1_ends()
+			if p.config.matchEnds {
+				p.exp_phase1_ends()
+			}
 
-		p.exp_phase2_and_3_lcs()
+			if !p.someRangeIsEmpty() {
+				p.exp_phase2_and_3_lcs()
+			}
 
-	} else {
-
-		if p.config.alignRareLines {
-			p.processOneRangePair()
-			glog.Info("PerformDiff processed rare lines, diffState:\n", p.SDumpToDepth(1))
-			p.config.alignRareLines = false
+		} else {
+			if p.config.alignRareLines {
+				p.processOneRangePair()
+				glog.Info("PerformDiff processed rare lines, diffState:\n", p.SDumpToDepth(1))
+				p.config.alignRareLines = false
+			}
+			p.processAllGapsInB(true, func() { p.processOneRangePair() })
+			glog.Info("PerformDiff processed gaps in B, diffState:\n", p.SDumpToDepth(1))
 		}
-		p.processAllGapsInB(true, func() { p.processOneRangePair() })
-		glog.Info("PerformDiff processed gaps in B, diffState:\n", p.SDumpToDepth(1))
-
 	}
 
 	p.splitMixedMatches()
@@ -123,8 +129,9 @@ type diffState struct {
 
 	// Range being considered by matchRangeEnds (to match common prefix and suffix
 	// lines), matchRangeMiddle (to find matches with possible mismatches
-	// between them). Set by extendAllMatches and fillAllGaps.
-	aRange, bRange FileRange
+	// between them), etc. Set by processAllGapsInA and processAllGapsInB.
+	aRange, bRange              FileRange
+	pairBeforeGap, pairAfterGap *BlockPair
 
 	// Discovered pairs (matches, moves, copies, mismatches).
 	pairs []*BlockPair
@@ -148,32 +155,54 @@ type diffState struct {
 	config DifferencerConfig
 }
 
+func (p *diffState) someRangeIsEmpty() bool {
+	return FileRangeIsEmpty(p.aRange) || FileRangeIsEmpty(p.bRange)
+}
+
 // Do exact and approximate matching at the start and end of the full ranges.
 func (p *diffState) exp_phase1_ends() {
+	glog.Info("exp_phase1_ends entry")
+	defer glog.Info("exp_phase1_ends exit")
+
 	p.assertNoPairs()
 
-	if !FileRangeIsEmpty(p.aRange) && !FileRangeIsEmpty(p.bRange) {
-		if p.matchRangeEnds( /*prefix*/ true /*suffix*/, true /*normalize*/, false) {
-			return
-		}
-		if p.config.matchNormalizedEnds &&
-			p.matchRangeEnds( /*prefix*/ true /*suffix*/, true /*normalize*/, true) {
-			return
+	p.matchRangeEnds( /*prefix*/ true /*suffix*/, true /*normalize*/, false)
+	if p.config.matchNormalizedEnds && !p.someRangeIsEmpty() {
+		p.matchRangeEnds( /*prefix*/ true /*suffix*/, true /*normalize*/, true)
+	}
+
+	// We don't want to swallow up common lines next to the gap, as those may
+	// be part of a move or copy.
+	if !p.someRangeIsEmpty() {
+		for {
+			startingCount := p.bRemainingCount
+			p.processAllGapsInB(true, func() { p.growGapByCommonLines() })
+			if startingCount == p.bRemainingCount { break }
 		}
 	}
+
+	glog.Info("exp_phase1_ends produced the following")
+	glogSideBySide(p.aFile, p.bFile, p.pairs, false, nil)
 }
 
 // Match the middle (not the common ends) using LCS, then extend.
 func (p *diffState) exp_phase2_and_3_lcs() {
+	glog.Info("exp_phase2_and_3_lcs entry")
+	defer glog.Info("exp_phase2_and_3_lcs exit")
+
 	var cfg DifferencerConfig = p.config
 	defer func() {
 		p.config = cfg
 	}()
+
 	p.config.detectBlockMoves = false
 	p.config.matchEnds = true
 	p.config.matchNormalizedEnds = p.config.alignNormalizedLines
 
 	p.matchRangeMiddle()
+
+	glog.Info("exp_phase2_and_3_lcs matched middle, producing the following")
+	glogSideBySide(p.aFile, p.bFile, p.pairs, false, nil)
 
 	if p.config.alignRareLines {
 		p.config.alignRareLines = false
@@ -182,6 +211,9 @@ func (p *diffState) exp_phase2_and_3_lcs() {
 }
 
 func (p *diffState) exp_phase5_moves_and_copies() {
+	glog.Info("exp_phase5_moves_and_copies entry")
+	defer glog.Info("exp_phase5_moves_and_copies exit")
+
 	var cfg DifferencerConfig = p.config
 	defer func() {
 		p.config = cfg
@@ -254,6 +286,17 @@ func (p *diffState) sortPairsByB() {
 		SortBlockPairsByBIndex(p.pairs)
 		p.isSortedByA = false // Might be, but can't be sure.
 		p.isSortedByB = true
+	}
+}
+
+func (p *diffState) removeBlockPair(bp *BlockPair) {
+	if bp == nil { return }
+	glog.Infof("removeBlockPair: bp:\n%s", spew.Sdump(bp))
+	for n, pair := range p.pairs {
+		if pair != bp { continue }
+		p.bRemainingCount += bp.BLength
+		p.pairs = append(p.pairs[:n], p.pairs[n+1:]...)
+		return
 	}
 }
 
@@ -407,6 +450,15 @@ func (p *diffState) convertMatchesToBlockPairs(
 }
 
 func (p *diffState) rangeToBlockPairs() (newPairs []*BlockPair) {
+	if FileRangeIsEmpty(p.aRange) {
+		glog.Warning("aRange is empty!")
+		return
+	}
+	if FileRangeIsEmpty(p.bRange) {
+		glog.Warning("bRange is empty!")
+		return
+	}
+
 	// If we're here, then aRange and bRange contain the remaining lines to be
 	// matched.	Figure out the subset of lines we're going to be matching.
 	var aLines, bLines []LinePos
@@ -467,18 +519,6 @@ func (p *diffState) isExactMatch(aIndex, bIndex int) bool {
 	return ah == bh
 }
 
-func (p *diffState) isExactMatchSequence(aIndex, bIndex, length int) bool {
-	for length > 0 {
-		if !p.isExactMatch(aIndex, bIndex) {
-			return false
-		}
-		aIndex++
-		bIndex++
-		length--
-	}
-	return true
-}
-
 func (p *diffState) splitIfMixedMatch(n int) {
 	bp := p.pairs[n]
 	if !bp.IsNormalizedMatch {
@@ -529,6 +569,93 @@ func (p *diffState) splitMixedMatches() {
 		p.splitIfMixedMatch(n)
 	}
 }
+
+// Support for figuring out if a BlockPair contains some or all lines that
+// are common. n must be in the half open intervals [0, pair.ALength) and
+// [0, pair.BLength).
+func (p *diffState) lineOfPairIsCommon(pair *BlockPair, n int) bool {
+	//	aIndex, bIndex := pair.AIndex + n, pair.BIndex + n
+	aLP := &p.aFile.Lines[pair.AIndex+n]
+	bLP := &p.bFile.Lines[pair.BIndex+n]
+	return aLP.ProbablyCommon || bLP.ProbablyCommon || aLP.CountInFile > 3 || bLP.CountInFile > 3
+}
+
+func (p *diffState) countCommonPrefixLinesOfMatchPair(pair *BlockPair) int {
+	if !pair.IsMatch && !pair.IsNormalizedMatch {
+		return 0
+	}
+	limit := pair.ALength
+	for n := 0; n < limit; n++ {
+		if !p.lineOfPairIsCommon(pair, n) {
+			return n
+		}
+	}
+	return limit
+}
+
+func (p *diffState) countCommonSuffixLinesOfMatchPair(pair *BlockPair) int {
+	if !pair.IsMatch && !pair.IsNormalizedMatch {
+		return 0
+	}
+	limit := pair.ALength
+	for n := 0; n < limit; n++ {
+		if !p.lineOfPairIsCommon(pair, limit-1-n) {
+			return n
+		}
+	}
+	return limit
+}
+
+func (p *diffState) growGapByCommonLines() {
+	if p.pairBeforeGap != nil {
+		n := p.countCommonSuffixLinesOfMatchPair(p.pairBeforeGap)
+		if n > 0 {
+			glog.Errorf("Found %d common lines in suffix of match pair", n)
+			p.removeBlockPair(p.pairBeforeGap)
+			if n == p.pairBeforeGap.ALength {
+				// The whole thing is common lines.
+				p.pairBeforeGap.IsMatch = false
+				p.pairBeforeGap.IsNormalizedMatch = false
+				p.pairBeforeGap.ALength = 0
+				p.pairBeforeGap.BLength = 0
+			} else {
+				p.pairBeforeGap.ALength -= n
+				p.pairBeforeGap.BLength -= n
+				p.addBlockPair(p.pairBeforeGap)
+			}
+		}
+	}
+	if p.pairAfterGap != nil {
+		n := p.countCommonPrefixLinesOfMatchPair(p.pairAfterGap)
+		if n > 0 {
+			glog.Errorf("Found %d common lines in prefix of match pair", n)
+			p.removeBlockPair(p.pairAfterGap)
+			if n == p.pairAfterGap.ALength {
+				// The whole thing is common lines.
+				p.pairAfterGap.IsMatch = false
+				p.pairAfterGap.IsNormalizedMatch = false
+				p.pairAfterGap.ALength = 0
+				p.pairAfterGap.BLength = 0
+			} else {
+				p.pairAfterGap.AIndex += n
+				p.pairAfterGap.ALength -= n
+				p.pairAfterGap.BIndex += n
+				p.pairAfterGap.BLength -= n
+				p.addBlockPair(p.pairAfterGap)
+			}
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
 
 func makeAOrderIndex(pairs []*BlockPair) (pairsByA []*BlockPair, pair2AOrder map[*BlockPair]int) {
 	pairsByA = append(pairsByA, pairs...)
@@ -665,24 +792,28 @@ func (p *diffState) processAllGapsInA(
 	// Find gaps in A, and create ranges for each.
 	p.sortPairsByA()
 	var aRanges, bRanges []FileRange
+	var pairsBeforeGaps, pairsAfterGaps []*BlockPair
 
 	var prevAPair *BlockPair
 	for _, thisAPair := range p.pairs {
 		aStart, aLength, bStart, bLength := p.computeGapInAWithB(
 			prevAPair, thisAPair, matchAPair1ToB)
-		prevAPair = thisAPair
 
-		if aLength == 0 {
-			continue
+		if aLength > 0 {
+			aRanges = append(aRanges, CreateFileRange(p.aFile, aStart, aLength))
+			bRanges = append(bRanges, CreateFileRange(p.bFile, bStart, bLength))
+			pairsBeforeGaps = append(pairsBeforeGaps, prevAPair)
+			pairsAfterGaps = append(pairsAfterGaps, thisAPair)
 		}
-		aRanges = append(aRanges, CreateFileRange(p.aFile, aStart, aLength))
-		bRanges = append(bRanges, CreateFileRange(p.bFile, bStart, bLength))
+		prevAPair = thisAPair
 	}
 
 	// Now process each of these ranges.
 	for n := range aRanges {
 		p.aRange = aRanges[n]
 		p.bRange = bRanges[n]
+		p.pairBeforeGap = pairsBeforeGaps[n]
+		p.pairAfterGap = pairsAfterGaps[n]
 		processCurrentRanges()
 	}
 }
@@ -741,23 +872,27 @@ func (p *diffState) processAllGapsInB(
 	// Find gaps in B, and create ranges for each.
 	p.sortPairsByB()
 	var aRanges, bRanges []FileRange
+	var pairsBeforeGaps, pairsAfterGaps []*BlockPair
 
 	var prevBPair *BlockPair
 	for _, thisBPair := range p.pairs {
 		bStart, bLength, aStart, aLength := p.computeGapInBWithA(
 			prevBPair, thisBPair, matchBPair1ToA)
-		prevBPair = thisBPair
-		if bLength == 0 {
-			continue
+		if bLength > 0 {
+			aRanges = append(aRanges, CreateFileRange(p.aFile, aStart, aLength))
+			bRanges = append(bRanges, CreateFileRange(p.bFile, bStart, bLength))
+			pairsBeforeGaps = append(pairsBeforeGaps, prevBPair)
+			pairsAfterGaps = append(pairsAfterGaps, thisBPair)
 		}
-		aRanges = append(aRanges, CreateFileRange(p.aFile, aStart, aLength))
-		bRanges = append(bRanges, CreateFileRange(p.bFile, bStart, bLength))
+		prevBPair = thisBPair
 	}
 
 	// Now process each of these ranges.
 	for n := range aRanges {
 		p.aRange = aRanges[n]
 		p.bRange = bRanges[n]
+		p.pairBeforeGap = pairsBeforeGaps[n]
+		p.pairAfterGap = pairsAfterGaps[n]
 		processCurrentRanges()
 	}
 

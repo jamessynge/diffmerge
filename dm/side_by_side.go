@@ -2,6 +2,7 @@ package dm
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"io"
 
@@ -41,17 +42,26 @@ type SideBySideConfig struct {
 	DisplayColumns int
 
 	DisplayLineNumbers bool
-	//	displayEntireFiles bool  // TODO
-	WrapLongLines bool // Wrap (vs. truncate) long lines.
+	WrapLongLines      bool // Wrap (vs. truncate) long lines.
 
 	SpacesPerTab int // Defaults to 8
+
+	// Number of lines of context (exact match lines) to output adjacent to
+	// changes. If 0, then all exact match lines are output.
+	ContextLines int
 }
 
 var DefaultSideBySideConfig = SideBySideConfig{
 	DisplayColumns:     80,
 	DisplayLineNumbers: true,
-	SpacesPerTab:       8,
 	WrapLongLines:      true,
+	SpacesPerTab:       8,
+	ContextLines:       3,
+}
+
+func init() {
+	flag.IntVar(&DefaultSideBySideConfig.ContextLines, "context", 3,
+		"Number of lines of context (unchanged lines) to show adjacent to a change")
 }
 
 // TODO Measure width of longest line in each file so that we can decide to
@@ -77,6 +87,51 @@ type sideBySideState struct {
 	w          io.Writer
 
 	lineFormat string
+}
+
+func (state *sideBySideState) initialize() {
+	// Subtract space for the code character and a space on either side.
+	availableOutputColumns := state.cfg.DisplayColumns - 3
+
+	if state.cfg.DisplayLineNumbers {
+		state.aDigitColumns = DigitCount(maxInt(2, state.aFile.GetLineCount()))
+		state.bDigitColumns = DigitCount(maxInt(2, state.bFile.GetLineCount()))
+		availableOutputColumns -= (state.aDigitColumns + state.bDigitColumns + 2)
+	} else {
+		state.aDigitColumns = 0
+		state.aDigitOffset = -1 // Intended to cause an OOBE if used.
+		state.bDigitColumns = 0
+		state.bDigitOffset = -1 // Intended to cause an OOBE if used.
+	}
+
+	state.aOutputColumns = maxInt(availableOutputColumns/2, 10)
+	state.bOutputColumns = state.aOutputColumns
+
+	var totalColumns int
+	if state.cfg.DisplayLineNumbers {
+		state.aDigitOffset = 0
+		state.aOutputOffset = 1 + state.aDigitColumns + state.aDigitOffset
+		state.codeOffset = 1 + state.aOutputOffset + state.aOutputColumns
+		state.bOutputOffset = 2 + state.aOutputOffset
+		state.bDigitOffset = 1 + state.bOutputOffset + state.bOutputColumns
+		totalColumns = state.bDigitOffset + state.bDigitColumns
+
+		state.lineFormat = fmt.Sprintf("%%%ds %%s %%s %%s %%-%ds\n", state.aDigitColumns, state.bDigitColumns)
+	} else {
+		state.aOutputOffset = 0
+		state.codeOffset = 1 + state.aOutputOffset + state.aOutputColumns
+		state.bOutputOffset = 2 + state.aOutputOffset
+		totalColumns = state.bOutputOffset + state.bOutputColumns
+
+		state.lineFormat = "%s %s %s\n"
+	}
+
+	if glog.V(2) {
+		glog.Info(spew.Sdump(state))
+	}
+
+	state.lineBuf = make([]byte, totalColumns)
+	state.lineBuffer = bytes.NewBuffer(state.lineBuf)
 }
 
 func (p *SideBySideConfig) lineToOutputBufs(line []byte, numColumns int) (bufs [][]byte) {
@@ -210,10 +265,28 @@ func (state *sideBySideState) outputABLines(aIndex, bIndex int, code string) {
 }
 
 func (state *sideBySideState) outputBlockPair(pair *BlockPair) {
-
 	glog.Infof("outputBlockPair: %v", *pair)
 
 	code := string([]byte{state.getCodeForBlockPair(pair)})
+	contextLines := state.cfg.ContextLines
+	if contextLines > 0 && pair.IsMatch && pair.ALength > 2*contextLines {
+		// Print first ContextLines of the pair, then a ... line, then print the
+		// last ContextLines of the pair.
+		for i := 0; i < contextLines; i++ {
+			aIndex := pair.AIndex + i
+			bIndex := pair.BIndex + i
+			state.outputABLines(aIndex, bIndex, code)
+		}
+		fmt.Fprintln(state.w, "...")
+		limit := pair.ALength
+		for i := limit - contextLines; i < limit; i++ {
+			aIndex := pair.AIndex + i
+			bIndex := pair.BIndex + i
+			state.outputABLines(aIndex, bIndex, code)
+		}
+		return
+	}
+
 	limit := maxInt(pair.ALength, pair.BLength)
 	for i := 0; i < limit; i++ {
 		var aIndex, bIndex int
@@ -231,8 +304,14 @@ func (state *sideBySideState) outputBlockPair(pair *BlockPair) {
 	}
 }
 
+func (state *sideBySideState) outputBlockPairs() {
+	for _, pair := range state.pairs {
+		state.outputBlockPair(pair)
+	}
+}
+
 func FormatSideBySide(aFile, bFile *File, pairs []*BlockPair, aIsPrimary bool,
-	w io.Writer, config SideBySideConfig) error {
+	w io.Writer, config SideBySideConfig) {
 	pairs = append([]*BlockPair(nil), pairs...)
 	if aIsPrimary {
 		SortBlockPairsByAIndex(pairs)
@@ -248,58 +327,39 @@ func FormatSideBySide(aFile, bFile *File, pairs []*BlockPair, aIsPrimary bool,
 		w:     w,
 	}
 
-	// Subtract space for the code character and a space on either side.
-	availableOutputColumns := state.cfg.DisplayColumns - 3
+	state.initialize()
+	state.outputBlockPairs()
 
-	if state.cfg.DisplayLineNumbers {
-		state.aDigitColumns = DigitCount(maxInt(2, aFile.GetLineCount()))
-		state.bDigitColumns = DigitCount(maxInt(2, bFile.GetLineCount()))
-		availableOutputColumns -= (state.aDigitColumns + state.bDigitColumns + 2)
+	return
+}
+
+func glogSideBySide(aFile, bFile *File, pairs []*BlockPair, aIsPrimary bool,
+	optionalConfig *SideBySideConfig) {
+	pairs = append([]*BlockPair(nil), pairs...)
+	if aIsPrimary {
+		SortBlockPairsByAIndex(pairs)
 	} else {
-		state.aDigitColumns = 0
-		state.aDigitOffset = -1 // Intended to cause an OOBE if used.
-		state.bDigitColumns = 0
-		state.bDigitOffset = -1 // Intended to cause an OOBE if used.
+		SortBlockPairsByBIndex(pairs)
 	}
 
-	state.aOutputColumns = maxInt(availableOutputColumns/2, 10)
-	state.bOutputColumns = state.aOutputColumns
+	var buf bytes.Buffer
 
-	var totalColumns int
-	if state.cfg.DisplayLineNumbers {
-		state.aDigitOffset = 0
-		state.aOutputOffset = 1 + state.aDigitColumns + state.aDigitOffset
-		state.codeOffset = 1 + state.aOutputOffset + state.aOutputColumns
-		state.bOutputOffset = 2 + state.aOutputOffset
-		state.bDigitOffset = 1 + state.bOutputOffset + state.bOutputColumns
-		totalColumns = state.bDigitOffset + state.bDigitColumns
-
-		state.lineFormat = fmt.Sprintf("%%%ds %%s %%s %%s %%-%ds\n", state.aDigitColumns, state.bDigitColumns)
-	} else {
-		state.aOutputOffset = 0
-		state.codeOffset = 1 + state.aOutputOffset + state.aOutputColumns
-		state.bOutputOffset = 2 + state.aOutputOffset
-		totalColumns = state.bOutputOffset + state.bOutputColumns
-
-		state.lineFormat = "%s %s %s\n"
+	state := &sideBySideState{
+		cfg:   DefaultSideBySideConfig,
+		aFile: aFile,
+		bFile: bFile,
+		pairs: pairs,
+		w:     &buf,
 	}
 
-	glog.Info(spew.Sdump(state))
-
-	state.lineBuf = make([]byte, totalColumns)
-	state.lineBuffer = bytes.NewBuffer(state.lineBuf)
-
-	for _, pair := range pairs {
-		state.outputBlockPair(pair)
+	if optionalConfig != nil {
+		state.cfg = *optionalConfig
 	}
 
-	// TODO Calculate how much width we need for line numbers (based on number
-	// of digits required for largest line number, 1-based, so that is number
-	// of lines in the larger file)
-	// TODO Calculate how much width we assign to each file, leaving room for
-	// leading digits (might not be the same if we have an odd number of chars
-	// available).
-	// TODO Consider issue related to multibyte runes.
+	state.initialize()
+	state.outputBlockPairs()
 
-	return nil
+	// Maybe split if glog can't take too large a string?
+
+	glog.Info("\n\n", buf.String(), "\n\n")
 }

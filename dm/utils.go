@@ -183,7 +183,9 @@ func normalizeLine(line []byte) []byte {
 }
 
 var wellKnownCommonLines map[string]bool
+
 func init() {
+	wellKnownCommonLines = make(map[string]bool)
 	wellKnownCommonLines["//"] = true
 	wellKnownCommonLines["/*"] = true
 	wellKnownCommonLines["*"] = true
@@ -198,6 +200,8 @@ func init() {
 }
 
 func computeIsProbablyCommon(normalizedLine []byte) bool {
-	if len(normalizedLine) >= 3 { return false }
+	if len(normalizedLine) >= 3 {
+		return false
+	}
 	return wellKnownCommonLines[string(normalizedLine)]
 }
