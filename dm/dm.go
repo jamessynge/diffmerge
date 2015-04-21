@@ -51,6 +51,10 @@ type LinePos struct {
 	// Maximum is 255, but that is OK for rare-ness checking.
 	CountInFile uint8
 
+	// Length of line after normalization.
+	// Maximum is 255, but that is OK for deciding whether a line is short or not.
+	NormalizedLength uint8
+
 	// Is this a well known common line (e.g. "/*" or "#", or an empty line).
 	ProbablyCommon bool // Based solely on normalized content, not other lines.
 }

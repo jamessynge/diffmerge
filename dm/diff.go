@@ -83,6 +83,14 @@ func PerformDiff(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPa
 				p.exp_phase2_and_3_lcs()
 			}
 
+			p.exp_phase5_moves_and_copies()
+
+
+
+
+
+
+
 		} else {
 			if p.config.alignRareLines {
 				p.processOneRangePair()
@@ -161,8 +169,8 @@ func (p *diffState) someRangeIsEmpty() bool {
 
 // Do exact and approximate matching at the start and end of the full ranges.
 func (p *diffState) exp_phase1_ends() {
-	glog.Info("exp_phase1_ends entry")
-	defer glog.Info("exp_phase1_ends exit")
+	glog.Info("exp_phase1_ends entry #################################################################")
+	defer glog.Info("exp_phase1_ends exit #################################################################")
 
 	p.assertNoPairs()
 
@@ -187,8 +195,8 @@ func (p *diffState) exp_phase1_ends() {
 
 // Match the middle (not the common ends) using LCS, then extend.
 func (p *diffState) exp_phase2_and_3_lcs() {
-	glog.Info("exp_phase2_and_3_lcs entry")
-	defer glog.Info("exp_phase2_and_3_lcs exit")
+	glog.Info("exp_phase2_and_3_lcs entry #################################################################")
+	defer glog.Info("exp_phase2_and_3_lcs exit #################################################################")
 
 	var cfg DifferencerConfig = p.config
 	defer func() {
@@ -211,8 +219,8 @@ func (p *diffState) exp_phase2_and_3_lcs() {
 }
 
 func (p *diffState) exp_phase5_moves_and_copies() {
-	glog.Info("exp_phase5_moves_and_copies entry")
-	defer glog.Info("exp_phase5_moves_and_copies exit")
+	glog.Info("exp_phase5_moves_and_copies entry #################################################################")
+	defer glog.Info("exp_phase5_moves_and_copies exit #################################################################")
 
 	var cfg DifferencerConfig = p.config
 	defer func() {
@@ -223,13 +231,19 @@ func (p *diffState) exp_phase5_moves_and_copies() {
 
 	var newPairs []*BlockPair
 
-	minExtraBLinesForProcessing := 5
+	minExtraBLinesForProcessing := 3
 
 	p.processAllGapsInB(true, func() {
 		extraBLines := p.bRange.GetLineCount() - p.aRange.GetLineCount()
+
+		glog.Infof("Processing gap of %d A lines, %d B lines, with %d extra B lines:\nB BlockPair before: %v\nB BlockPair after: %v",
+			p.aRange.GetLineCount(), p.bRange.GetLineCount(),
+			extraBLines, p.pairBeforeGap, p.pairAfterGap)
+
 		if extraBLines < minExtraBLinesForProcessing {
 			return
 		}
+
 		// Match p.bRange to all of A.
 		p.aRange = p.aFullRange
 		somePairs := p.rangeToBlockPairs()
@@ -467,7 +481,8 @@ func (p *diffState) rangeToBlockPairs() (newPairs []*BlockPair) {
 		// TODO Change to make use of LinePos.CountInFile and LinePos.ProbablyCommon.
 		aLines, bLines = FindRareLinesInRanges(
 			p.aRange, p.bRange, normalize,
-			p.config.requireSameRarity, p.config.maxRareLineOccurrences)
+			p.config.requireSameRarity, p.config.omitProbablyCommonLines,
+			p.config.maxRareLineOccurrencesInRange, p.config.maxRareLineOccurrencesInFile)
 		glog.V(1).Info("rangeToBlockPairs found ", len(aLines), " rare lines in A, of ",
 			p.aRange.GetLineCount(), " middle lines")
 		glog.V(1).Info("rangeToBlockPairs found ", len(bLines), " rare lines in B, of ",
@@ -610,7 +625,7 @@ func (p *diffState) growGapByCommonLines() {
 	if p.pairBeforeGap != nil {
 		n := p.countCommonSuffixLinesOfMatchPair(p.pairBeforeGap)
 		if n > 0 {
-			glog.Errorf("Found %d common lines in suffix of match pair", n)
+			glog.Infof("Found %d common lines in suffix of match pair", n)
 			p.removeBlockPair(p.pairBeforeGap)
 			if n == p.pairBeforeGap.ALength {
 				// The whole thing is common lines.
@@ -628,7 +643,7 @@ func (p *diffState) growGapByCommonLines() {
 	if p.pairAfterGap != nil {
 		n := p.countCommonPrefixLinesOfMatchPair(p.pairAfterGap)
 		if n > 0 {
-			glog.Errorf("Found %d common lines in prefix of match pair", n)
+			glog.Infof("Found %d common lines in prefix of match pair", n)
 			p.removeBlockPair(p.pairAfterGap)
 			if n == p.pairAfterGap.ALength {
 				// The whole thing is common lines.

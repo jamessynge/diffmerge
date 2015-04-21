@@ -7,10 +7,11 @@ import ()
 // normalizedMatch == true to use the hashes of the normalized lines.
 // sameCount == true to require the rare lines to appear the same number of
 // times in each range.
-// maxCount is the maximum number of times a hash may appear in the range
-// and still be considered rare; maxCount==1 is the Patience Diff approach.
+// maxCountInRange is the maximum number of times a hash may appear in the range
+// and still be considered rare; maxCountInRange==1 is the Patience Diff approach.
 func FindRareLinesInRanges(aRange, bRange FileRange,
-	normalizedMatch, sameCount bool, maxCount int) (aRareLines, bRareLines []LinePos) {
+	normalizedMatch, sameCount, omitProbablyCommon bool,
+	maxCountInRange, maxCountInFile int) (aRareLines, bRareLines []LinePos) {
 	var aHashPositions, bHashPositions HashPositions
 	if normalizedMatch {
 		aHashPositions = aRange.GetNormalizedHashPositions()
@@ -23,7 +24,7 @@ func FindRareLinesInRanges(aRange, bRange FileRange,
 	rareHashes := make(map[uint32]bool)
 	for hash, ap := range aHashPositions {
 		al := len(ap)
-		if !(1 <= al && al <= maxCount) {
+		if !(1 <= al && al <= maxCountInRange) {
 			continue
 		}
 		if bp, ok := bHashPositions[hash]; ok {
@@ -34,7 +35,7 @@ func FindRareLinesInRanges(aRange, bRange FileRange,
 				}
 				// They're both equally rare.
 			} else {
-				if !(1 <= bl && bl <= maxCount) {
+				if !(1 <= bl && bl <= maxCountInRange) {
 					continue
 				}
 				// They're both rare enough.
@@ -50,9 +51,12 @@ func FindRareLinesInRanges(aRange, bRange FileRange,
 		getter = GetLPHash
 	}
 	selector := func(lp LinePos) bool {
+		if maxCountInFile > 0 && int(lp.CountInFile) > maxCountInFile { return false }
+		if omitProbablyCommon && lp.ProbablyCommon { return false }
 		return rareHashes[getter(lp)]
 	}
 	aRareLines = aRange.Select(selector)
 	bRareLines = bRange.Select(selector)
 	return
 }
+

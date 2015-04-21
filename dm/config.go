@@ -38,7 +38,11 @@ type DifferencerConfig struct {
 	// When deciding which lines are rare in a region being aligned, how many
 	// times may a line appear (actually, how many times may its hash appear)
 	// and still be considered rare?
-	maxRareLineOccurrences int
+	maxRareLineOccurrencesInRange int
+
+	// When selecting rare lines, discard those lines whose hash, after
+	// normalization, appears more than this many times. If 0, not applied.
+	maxRareLineOccurrencesInFile int
 
 	// When deciding which lines are rare in two regions being aligned,
 	// must those lines appear the same number of times in each region?
@@ -56,6 +60,10 @@ type DifferencerConfig struct {
 	// When computing an LCS alignment between files, should longer equal lines
 	// be weighted more heavily that short lines?
 	lengthWeightedSimilarity bool
+
+	// When doing alignment (initial or move/copy detection), omit from
+	// consideration the lines that are probably common (e.g. "/*" or "}").
+	omitProbablyCommonLines bool
 }
 
 func (p *DifferencerConfig) CreateFlags(f *flag.FlagSet) {
@@ -88,10 +96,16 @@ func (p *DifferencerConfig) CreateFlags(f *flag.FlagSet) {
 		`)
 
 	f.IntVar(
-		&p.maxRareLineOccurrences, "max-rare-line-occurrences", 1, `
+		&p.maxRareLineOccurrencesInRange, "max-rare-line-occurrences-in-range", 1, `
 		When deciding which lines are rare in a region being aligned, how many
 		times may a line appear (actually, how many times may its hash appear)
 		and still be considered rare?
+		`)
+
+	f.IntVar(
+		&p.maxRareLineOccurrencesInFile, "max-rare-line-occurrences-in-file", 3, `
+		When selecting rare lines, discard those lines whose hash, after
+		normalization, appears more than this many times. If 0, not applied.
 		`)
 
 	f.BoolVar(
@@ -118,4 +132,11 @@ func (p *DifferencerConfig) CreateFlags(f *flag.FlagSet) {
 		When computing an LCS alignment between files, should longer equal lines
 		be weighted more heavily that short lines?
 		`)
+
+	f.BoolVar(
+		&p.omitProbablyCommonLines, "omit-probably-common-lines", true, `
+		When doing alignment (initial or move/copy detection), omit from
+		consideration the lines that are probably common (e.g. "/*" or "}").
+		`)
 }
+

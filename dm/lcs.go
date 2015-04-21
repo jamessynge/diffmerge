@@ -7,6 +7,13 @@ import (
 // Dynamic programming solution to produce a weighted LCS of two "strings"
 // A and B of length aLength and bLength, respectively.
 // getSimilarity must return a value between 0 and 1, inclusive.
+// TODO In some senarios we prefer the shortest of several LCS (i.e. they
+// have the same number of symbols in the string, but one may have fewer other
+// symbols in it than others).  Would be best if we could produce all candidates,
+// along with their weights, and then score them. Basically the short-coming of
+// the basic LCS approach is that it doesn't consider any measure other than
+// number of symbols (and here the weight of pairs of symbols), but doesn't
+// have any other objective function.
 func WeightedLCS(aLength, bLength int, getSimilarity func(aIndex, bIndex int) float32) (
 	result []IndexPair) {
 
