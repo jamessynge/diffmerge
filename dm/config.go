@@ -52,6 +52,10 @@ type DifferencerConfig struct {
 	// how similar are two normalized lines to be considered, where 0 is
 	// completely dissimilar, and 1 is equal.
 	lcsNormalizedSimilarity float64
+
+	// When computing an LCS alignment between files, should longer equal lines
+	// be weighted more heavily that short lines?
+	lengthWeightedSimilarity bool
 }
 
 func (p *DifferencerConfig) CreateFlags(f *flag.FlagSet) {
@@ -104,8 +108,14 @@ func (p *DifferencerConfig) CreateFlags(f *flag.FlagSet) {
 
 	f.Float64Var(
 		&p.lcsNormalizedSimilarity, "lcs-normalized-similarity", 0.5, `
-		When computing the longest common subsequence of two file ranges,
+		When computing the longest common subsequence (LCS) of two file ranges,
 	  how similar are two normalized lines to be considered, where 0 is
 	  completely dissimilar, and 1 is equal.
+		`)
+
+	f.BoolVar(
+		&p.lengthWeightedSimilarity, "length-weighted-similarity", true, `
+		When computing an LCS alignment between files, should longer equal lines
+		be weighted more heavily that short lines?
 		`)
 }

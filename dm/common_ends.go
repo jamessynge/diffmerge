@@ -140,14 +140,14 @@ func MatchCommonSuffix(aRange, bRange FileRange, normalized bool) (
 func MatchCommonEnds(aRange, bRange FileRange, prefix, suffix, normalized bool) (
 	aRest, bRest FileRange, pairs []*BlockPair) {
 
-	glog.Infof("MatchCommonEnds A lines: %d; B lines: %d; prefix: %v; suffix: %v; normalized: %v",
-		aRange.GetLineCount(), bRange.GetLineCount(),
-		prefix, suffix, normalized)
-
 	if FileRangeIsEmpty(aRange) || FileRangeIsEmpty(bRange) {
 		// glog.Warning("Wasted call to MatchCommonEnds with emtpy range(s)")
 		return aRange, bRange, nil
 	}
+
+	glog.Infof("MatchCommonEnds A lines: %d; B lines: %d; prefix: %v; suffix: %v; normalized: %v",
+		aRange.GetLineCount(), bRange.GetLineCount(),
+		prefix, suffix, normalized)
 
 	tryMatch := func(matcher MatchCommonXFunc) (done bool) {
 		var bp *BlockPair
@@ -168,6 +168,7 @@ func MatchCommonEnds(aRange, bRange FileRange, prefix, suffix, normalized bool) 
 		}
 		if bRest == nil {
 			glog.Infof("MatchCommonEnds: matched ALL %d lines of bRange", bRange.GetLineCount())
+			done = true
 		} else {
 			before, after := bRange.GetLineCount(), bRest.GetLineCount()
 			if after != before {
