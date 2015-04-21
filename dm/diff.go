@@ -244,9 +244,18 @@ func (p *diffState) exp_phase5_moves_and_copies() {
 			return
 		}
 
+		// Should we look for a group of contiguous lines in p.bRange that are rare,
+		// and attempt to find a match for them in aFullRange that is also contiguous?
+		// That wouldn't allow for edits, but would be a strong indication of a move/copy.
+
+
 		// Match p.bRange to all of A.
 		p.aRange = p.aFullRange
 		somePairs := p.rangeToBlockPairs()
+
+		glog.V(1).Info("exp_phase5_moves_and_copies found ", len(newPairs),
+			" BlockPairs while matching a gap with ", extraBLines, " extra lines in B")
+
 		if len(somePairs) == 0 {
 			return
 		}
@@ -255,8 +264,13 @@ func (p *diffState) exp_phase5_moves_and_copies() {
 		// empty lines in various parts of A aren't useful; we're looking for a
 		// tight match, showing that a move or copy has occurred.
 
-		glog.V(1).Info("exp_phase5_moves_and_copies found ", len(newPairs),
-			" BlockPairs while matching a gap with ", extraBLines, " extra lines in B")
+		if len(somePairs) > 1 {
+			// 
+		}
+		
+
+
+
 	})
 }
 
