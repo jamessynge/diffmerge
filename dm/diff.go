@@ -241,6 +241,10 @@ func (p *diffState) exp_phase5_moves_and_copies() {
 		// and attempt to find a match for them in aFullRange that is also contiguous?
 		// That wouldn't allow for edits, but would be a strong indication of a move/copy.
 
+		// TODO Consider matching against the portion of aFullRange before aRange,
+		// and again against the portion after aRange, on the theory that the move
+		// needs to be from somewhere other than in the gap.
+
 
 		// Match p.bRange to all of A.
 		p.aRange = p.aFullRange
@@ -295,6 +299,11 @@ func (p *diffState) exp_phase5_moves_and_copies() {
 			// new pairs, and see if we can extend the start and end.
 		}
 	})
+
+	p.processAllGapsInB(true, func() { p.matchRangeEndsAndMaybeBackoff(false) })
+		
+	glog.Info("exp_phase5_moves_and_copies the following")
+	glogSideBySide(p.aFile, p.bFile, p.pairs, false, nil)
 }
 
 func (p *diffState) processOneRangePair() {
@@ -587,7 +596,6 @@ func (p *diffState) rangeToBlockPairs() (newPairs []*BlockPair) {
 	var aLines, bLines []LinePos
 	normalize := p.config.alignNormalizedLines
 	if p.config.alignRareLines {
-		// TODO Change to make use of LinePos.CountInFile and LinePos.ProbablyCommon.
 		aLines, bLines = FindRareLinesInRanges(
 			p.aRange, p.bRange, normalize,
 			p.config.requireSameRarity, p.config.omitProbablyCommonLines,
