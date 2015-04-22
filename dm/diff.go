@@ -261,7 +261,6 @@ func (p *diffState) exp_phase5_moves_and_copies() {
 		// empty lines in various parts of A aren't useful; we're looking for a
 		// tight match, showing that a move or copy has occurred.
 
-		// For now, just accept them, and mark them as a
 
 		glog.Info("exp_phase5_moves_and_copies produced these move or copy pairs from one gap in B:")
 		glogSideBySide(p.aFile, p.bFile, somePairs, false, nil)
@@ -283,7 +282,9 @@ func (p *diffState) exp_phase5_moves_and_copies() {
 		glog.Infof("numMatchedALines=%d    numMatchedBLines=%d",
 		numMatchedALines, numMatchedBLines)
 
-		if numMatchedALines <= numMatchedBLines * 3  {
+		if numMatchedBLines < 2 {
+			// Seems too small.
+		} else if numMatchedALines <= numMatchedBLines * 3  {
 			// Seems plausible.
 			// SHOULD CHECK THAT IT REALLY IS A MOVE, EH!
 			glog.Info("exp_phase5_moves_and_copies accepting identified move")
