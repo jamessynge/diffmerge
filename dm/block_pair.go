@@ -51,6 +51,14 @@ func (p *BlockPair) markAsMismatch() {
 	p.IsNormalizedMatch = false
 }
 
+func (p *BlockPair) ABeyond() int {
+	return p.AIndex + p.ALength
+}
+
+func (p *BlockPair) BBeyond() int {
+	return p.BIndex + p.BLength
+}
+
 func (p *BlockPair) IsSentinal() bool {
 	return p.AIndex < 0 || (p.ALength == 0 && p.BLength == 0)
 }

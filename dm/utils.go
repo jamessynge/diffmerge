@@ -205,3 +205,15 @@ func computeIsProbablyCommon(normalizedLine []byte) bool {
 	}
 	return wellKnownCommonLines[string(normalizedLine)]
 }
+
+func computeNumRareLinesInRange(
+		fr FileRange, omitProbablyCommon bool, maxCountInFile int) (num int) {
+	maxCountInFile = maxInt(1, maxCountInFile)
+	for n := 0; n < fr.GetLineCount(); n++ {
+		lp := fr.GetLinePosRelative(n)
+		if omitProbablyCommon && lp.ProbablyCommon { continue }
+		if int(lp.CountInFile) > maxCountInFile { continue }
+		num++
+	}
+	return
+}

@@ -234,7 +234,7 @@ func (state *sideBySideState) outputABLines(aIndex, bIndex int, code string) {
 
 	limit := maxInt(1, maxInt(len(aBufs), len(bBufs))) // If both are blank, want at least 1.
 
-	glog.Infof("outputABLines: %d, %d, %s;  #aBufs %d; #bBufs %d; limit %d",
+	glog.V(2).Infof("outputABLines: %d, %d, %s;  #aBufs %d; #bBufs %d; limit %d",
 		aIndex, bIndex, code, len(aBufs), len(bBufs), limit)
 
 	for n := 0; n < limit; n++ {
@@ -265,7 +265,7 @@ func (state *sideBySideState) outputABLines(aIndex, bIndex int, code string) {
 }
 
 func (state *sideBySideState) outputBlockPair(pair *BlockPair) {
-	glog.Infof("outputBlockPair: %v", *pair)
+	glog.V(2).Infof("outputBlockPair: %v", *pair)
 
 	code := string([]byte{state.getCodeForBlockPair(pair)})
 	contextLines := state.cfg.ContextLines
@@ -361,5 +361,5 @@ func glogSideBySide(aFile, bFile *File, pairs []*BlockPair, aIsPrimary bool,
 
 	// Maybe split if glog can't take too large a string?
 
-	glog.Info("\n\n", buf.String(), "\n\n")
+	glog.InfoDepth(1, "\n\n", buf.String(), "\n\n")
 }
