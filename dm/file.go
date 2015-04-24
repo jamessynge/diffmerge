@@ -96,13 +96,13 @@ func ReadFile(name string) (*File, error) {
 			normalizedLength := len(normalizedLine)
 			probablyCommon := normalizedLength == 0 || computeIsProbablyCommon(normalizedLine)
 			p.Lines = append(p.Lines, LinePos{
-				Start:          pos,
-				Length:         length,
-				Index:          index,
-				Hash:           hash,
-				NormalizedHash: normalizedHash,
+				Start:            pos,
+				Length:           length,
+				Index:            index,
+				Hash:             hash,
+				NormalizedHash:   normalizedHash,
 				NormalizedLength: uint8(minInt(normalizedLength, 255)),
-				ProbablyCommon: probablyCommon,
+				ProbablyCommon:   probablyCommon,
 			})
 			pos += length
 		}

@@ -88,11 +88,16 @@ func PerformDiff(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPa
 				p.exp_phase2_and_3_lcs()
 			}
 
-			p.exp_phase4_moves()
+			for {
+				multipleCandidatesFound := p.exp_phase4_moves()
+				if !multipleCandidatesFound {
+					break
+				}
+			}
 
 			p.exp_phase5_copies()
 
-			p.matchRangeEndsAndMaybeBackoff(false)
+			//			p.matchRangeEndsAndMaybeBackoff(false)
 		} else if true {
 			// Experiment in an effort to better handle moves followed by edits, and
 			// also copies (possibly followed by edits):
@@ -123,7 +128,7 @@ func PerformDiff(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPa
 
 			p.exp_phase5_moves_and_copies()
 
-			p.matchRangeEndsAndMaybeBackoff(false)
+			//			p.matchRangeEndsAndMaybeBackoff(false)
 		} else {
 			if p.config.alignRareLines {
 				p.processOneRangePair()
@@ -357,7 +362,8 @@ type MoveCandidate struct {
 	limitsInB       IndexPair
 	numMatchedLines int
 }
-func (p *MoveCandidate) AExtent() {
+
+func (p *MoveCandidate) AExtent() int {
 	return p.limitsInA.Index2 - p.limitsInA.Index1
 }
 
@@ -378,9 +384,11 @@ func MakeMoveCandidate(pairs []*BlockPair) *MoveCandidate {
 }
 
 type MoveCandidates []*MoveCandidate
+
 func (v MoveCandidates) Len() int {
 	return len(v)
 }
+
 // Sort by ascending number of matched lines (higher is better),
 // then by descending number length of limits (lower is better),
 // then by AIndex.
@@ -399,7 +407,7 @@ func (v MoveCandidates) Less(i, j int) bool {
 	if iBLength != jBLength {
 		return iBLength > jBLength
 	}
-	// Ideally might like a measure of which move has moved the farthest, on 
+	// Ideally might like a measure of which move has moved the farthest, on
 	// the theory that we smaller moves are perhaps more likely (i.e. reordering
 	// a few lines within a function is more likely than moving them far away).
 	return ci.limitsInA.Index1 < cj.limitsInA.Index1
@@ -408,13 +416,16 @@ func (v MoveCandidates) Swap(i, j int) {
 	v[i], v[j] = v[j], v[i]
 }
 
-func (p *diffState) exp_phase4_moves() {
+func (p *diffState) exp_phase4_moves() (multipleCandidatesFound bool) {
 	glog.Info("exp_phase4_moves entry #################################################################")
 	defer glog.Info("exp_phase4_moves exit #################################################################")
 
+	oldARange, oldBRange := p.aRange, p.bRange
 	var cfg DifferencerConfig = p.config
 	defer func() {
 		p.config = cfg
+		p.aRange = oldARange
+		p.bRange = oldBRange
 	}()
 	p.config.detectBlockMoves = false
 	p.config.matchEnds = false
@@ -452,7 +463,7 @@ func (p *diffState) exp_phase4_moves() {
 
 	minRareLinesInA := 2
 	minRareLinesInB := 2
-	var acceptedMatches [][]*BlockPair
+	var acceptedMoveCandidates MoveCandidates
 	for an, aRange := range aGapRanges {
 		if range2RareCount[aRange] < minRareLinesInA {
 			glog.Infof("Skipping gap %d in A, not enough rare lines (only %d)\nRange: %v",
@@ -491,25 +502,27 @@ func (p *diffState) exp_phase4_moves() {
 			candidates = append(candidates, candidate)
 
 			glog.Infof("Found match of %d lines, extending over %d lines, in the A gap",
-				candidate.
-				limits.Index2-limits.Index1)
+				candidate.numMatchedLines, candidate.AExtent())
 		}
 
-		if len(candidatesPairs) == 0 {
+		if len(candidates) == 0 {
 			glog.Infof("Found no matches between gap %d in A and any gap in B", an)
 			continue
-		} else if len(candidatesPairs) == 1 {
+		} else if len(candidates) == 1 {
 			// For now, automatically keep it, but later may want to judge the
 			// likelihood that this represents a move (e.g. what fraction of the
 			// (rare lines in gap A and/or gap B is this match?).
-			acceptedMatches = append(acceptedMatches, candidatesPairs[0])
+			acceptedMoveCandidates = append(acceptedMoveCandidates, candidates[0])
 			continue
 		}
 
-		glog.Error("Need to evaluate multiple candidates, NYI")
-
-		// Break into disjoint sets (non-overlapping ALimits), then choose the
+		// TODO Break into disjoint sets (non-overlapping ALimits), then choose the
 		// best of each disjoint set.
+		// For now, just accept the highest ranking result.  At the cost of time,
+		// we can redo phase4.
+		multipleCandidatesFound = true
+		sort.Sort(sort.Reverse(candidates))
+		acceptedMoveCandidates = append(acceptedMoveCandidates, candidates[0])
 	}
 
 	// For each accepted match (slice of *BlockPair), if there are multiple
@@ -517,16 +530,30 @@ func (p *diffState) exp_phase4_moves() {
 	// two adjacent pairs is all exact and normalized matches of non-rare lines.
 	// This eliminates gaps that need to be matched later.
 
-	if len(acceptedMatches) == 0 {
+	if len(acceptedMoveCandidates) == 0 {
 		glog.Info("exp_phase4_moves had no luck")
 		return
 	}
-	glog.Errorf("NYI Use the %d acceptedMatches", len(acceptedMatches))
 
-	//	p.processAllGapsInB(true, func() { p.matchRangeEndsAndMaybeBackoff(false) })
+	for _, mc := range acceptedMoveCandidates {
+		for _, pair := range mc.pairs {
+			pair.IsMove = true
+			p.addBlockPair(pair)
+		}
+	}
 
 	glog.Info("exp_phase4_moves produced the following")
 	glogSideBySide(p.aFile, p.bFile, p.pairs, false, nil)
+
+	if p.config.alignRareLines {
+		p.config.alignRareLines = false
+		p.processAllGapsInA(true, func() { p.matchRangeEndsAndMaybeBackoff(true) })
+
+		glog.Info("exp_phase4_moves called matchRangeEndsAndMaybeBackoff, producing:")
+		glogSideBySide(p.aFile, p.bFile, p.pairs, false, nil)
+	}
+
+	return
 }
 
 func (p *diffState) exp_phase5_copies() {
@@ -600,8 +627,11 @@ func (p *diffState) removeBlockPair(bp *BlockPair) {
 		}
 		p.bRemainingCount += bp.BLength
 		p.pairs = append(p.pairs[:n], p.pairs[n+1:]...)
+		glog.Infof("removeBlockPair: bRemainingCount=%d",
+			p.bRemainingCount)
 		return
 	}
+	glog.Fatal("removeBlockPair unable to locate BlockPair!")
 }
 
 func (p *diffState) addBlockPair(bp *BlockPair) {

@@ -139,4 +139,3 @@ func (p *DifferencerConfig) CreateFlags(f *flag.FlagSet) {
 		consideration the lines that are probably common (e.g. "/*" or "}").
 		`)
 }
-

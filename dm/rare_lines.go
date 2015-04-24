@@ -51,12 +51,15 @@ func FindRareLinesInRanges(aRange, bRange FileRange,
 		getter = GetLPHash
 	}
 	selector := func(lp LinePos) bool {
-		if maxCountInFile > 0 && int(lp.CountInFile) > maxCountInFile { return false }
-		if omitProbablyCommon && lp.ProbablyCommon { return false }
+		if maxCountInFile > 0 && int(lp.CountInFile) > maxCountInFile {
+			return false
+		}
+		if omitProbablyCommon && lp.ProbablyCommon {
+			return false
+		}
 		return rareHashes[getter(lp)]
 	}
 	aRareLines = aRange.Select(selector)
 	bRareLines = bRange.Select(selector)
 	return
 }
-

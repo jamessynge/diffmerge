@@ -204,4 +204,3 @@ func FormatInterleaved(pairs []*BlockPair, aIsPrimary bool, aFile, bFile *File,
 
 	return nil
 }
-
