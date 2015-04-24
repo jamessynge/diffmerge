@@ -525,6 +525,10 @@ func (p *diffState) exp_phase4_moves() (multipleCandidatesFound bool) {
 		acceptedMoveCandidates = append(acceptedMoveCandidates, candidates[0])
 	}
 
+	// TODO Avoid multiple matches for a single line in B. Do this by
+	// sorting the acceptedMoveCandidates, and then checking for conflicts
+	// among their B lines.
+
 	// For each accepted match (slice of *BlockPair), if there are multiple
 	// BlockPairs, attempt to fill in between them if the entire gaps between
 	// two adjacent pairs is all exact and normalized matches of non-rare lines.
@@ -666,6 +670,44 @@ func (p *diffState) addBlockPair(bp *BlockPair) {
 		glog.Infof("addBlockPair: bRemainingCount=%d",
 			p.bRemainingCount)
 	}
+}
+
+// Given two BlockPairs that are in order in both A and B, create a FileRange
+// in each of A and B for the space between them, and attempt to fill the gap
+// between them.
+func (p *diffState) matchBetweenPairsAndMaybeBackoff(
+	pair1, pair2 *BlockPair, performBackoff bool) (matches []*BlockPair) {
+	aStart, bStart := pair1.ABeyond(), pair1.BBeyond()
+	aLength, bLength := pair2.AIndex-aStart, pair2.BIndex-bStart
+
+	glog.V(1).Infof("matchBetweenPairsAndMaybeBackoff ARange: [%d, %d)   BRange: [%d, %d)",
+		aStart, aStart+aLength, bStart, bStart+bLength)
+
+	if aLength == 0 || bLength == 0 {
+		return nil
+	}
+
+	oldARange, oldBRange := p.aRange, p.bRange
+	defer func() {
+		p.aRange = oldARange
+		p.bRange = oldBRange
+	}()
+
+	p.aRange = p.aFullRange.GetSubRange(aStart, aLength)
+	p.bRange = p.bFullRange.GetSubRange(bStart, bLength)
+
+	/*
+		glog.V(1).Info("matchBetweenPairsAndMaybeBackoff performing backoff")
+
+		isTargetRange := func() bool {
+			newAStart, newBStart := p.aRange.GetStartLine(), p.bRange.GetStartLine()
+			newABeyond, newBBeyond := newAStart+p.aRange.GetLineCount(), newBStart+p.bRange.GetLineCount()
+			return aStart <= newAStart && newABeyond <= aBeyond && bStart <= newBStart && newBBeyond <= bBeyond
+		}
+	*/
+
+	return
+
 }
 
 // Match common prefix and suffix of the gap, but if a gap still remains, we
