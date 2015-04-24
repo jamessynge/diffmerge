@@ -67,6 +67,13 @@ func PerformDiff(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPa
 			//    (i.e. so far there can be no copies, so there can only be 1-to-1
 			//    matches between A and B lines, or no match at all).  Where gaps
 			//    remain, back off if the bordering BlockPairs end in non-rare lines.
+			
+			// 3.5) TODO Before move detection, if a gap is small in both A and B,
+			//      (e.g. size of gap is within 50% on both sides and/or lines is < 5)
+			//		  see if the edit distance is small at the token or character level,
+			//      because it may simply be that a small edit has taken place, and
+			//      we don't need to go to the expense of looking for a move.
+			
 			// 4) Move detection: Find all the gaps in A that contain
 			//		rare lines, and and try to match those up with gaps in B. Choose
 			//    the best such match for each gap in A, but at most 1 (i.e. not
