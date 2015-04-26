@@ -94,8 +94,8 @@ func (state *sideBySideState) initialize() {
 	availableOutputColumns := state.cfg.DisplayColumns - 3
 
 	if state.cfg.DisplayLineNumbers {
-		state.aDigitColumns = DigitCount(maxInt(2, state.aFile.GetLineCount()))
-		state.bDigitColumns = DigitCount(maxInt(2, state.bFile.GetLineCount()))
+		state.aDigitColumns = DigitCount(MaxInt(2, state.aFile.GetLineCount()))
+		state.bDigitColumns = DigitCount(MaxInt(2, state.bFile.GetLineCount()))
 		availableOutputColumns -= (state.aDigitColumns + state.bDigitColumns + 2)
 	} else {
 		state.aDigitColumns = 0
@@ -104,7 +104,7 @@ func (state *sideBySideState) initialize() {
 		state.bDigitOffset = -1 // Intended to cause an OOBE if used.
 	}
 
-	state.aOutputColumns = maxInt(availableOutputColumns/2, 10)
+	state.aOutputColumns = MaxInt(availableOutputColumns/2, 10)
 	state.bOutputColumns = state.aOutputColumns
 
 	var totalColumns int
@@ -232,7 +232,7 @@ func (state *sideBySideState) outputABLines(aIndex, bIndex int, code string) {
 		bBufs = state.cfg.lineToOutputBufs(bBytes, state.bOutputColumns)
 	}
 
-	limit := maxInt(1, maxInt(len(aBufs), len(bBufs))) // If both are blank, want at least 1.
+	limit := MaxInt(1, MaxInt(len(aBufs), len(bBufs))) // If both are blank, want at least 1.
 
 	glog.V(2).Infof("outputABLines: %d, %d, %s;  #aBufs %d; #bBufs %d; limit %d",
 		aIndex, bIndex, code, len(aBufs), len(bBufs), limit)
@@ -287,7 +287,7 @@ func (state *sideBySideState) outputBlockPair(pair *BlockPair) {
 		return
 	}
 
-	limit := maxInt(pair.ALength, pair.BLength)
+	limit := MaxInt(pair.ALength, pair.BLength)
 	for i := 0; i < limit; i++ {
 		var aIndex, bIndex int
 		if i < pair.ALength {

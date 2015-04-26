@@ -28,6 +28,8 @@ func (m HashPositions) CopyMap() HashPositions {
 // tests.
 var theLineHasher = createLineHasher()
 
+func GetLineHasher() LineHasher { return theLineHasher }
+
 // Function that writes the current hash seed into the supplied hasher.
 // Replaceable for testing (i.e. can just reassign it to the output of another
 // call to createWriteHashSeed()).

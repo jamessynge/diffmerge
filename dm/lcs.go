@@ -36,7 +36,7 @@ func WeightedLCS(aLength, bLength int, getSimilarity func(aIndex, bIndex int) fl
 			// length aIndex+1 and bIndex+1.  Because the similarity is not just
 			// zero or one, we need to figure compute the maximum of 3 possible
 			// values.
-			maxNonSimilar := maxFloat32(table[aIndex][bIndex+1], table[aIndex+1][bIndex])
+			maxNonSimilar := MaxFloat32(table[aIndex][bIndex+1], table[aIndex+1][bIndex])
 
 			if similarity > 0 {
 				weightedLength := similarity + table[aIndex][bIndex]
@@ -44,7 +44,7 @@ func WeightedLCS(aLength, bLength int, getSimilarity func(aIndex, bIndex int) fl
 					glog.Infof("[%d, %d] weightedLength=%v, maxNonSimilar=%v",
 						aIndex, bIndex, weightedLength, maxNonSimilar)
 				}
-				table[aIndex+1][bIndex+1] = maxFloat32(weightedLength, maxNonSimilar)
+				table[aIndex+1][bIndex+1] = MaxFloat32(weightedLength, maxNonSimilar)
 			} else {
 				table[aIndex+1][bIndex+1] = maxNonSimilar
 			}

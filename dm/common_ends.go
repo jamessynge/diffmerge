@@ -15,7 +15,7 @@ func MatchCommonPrefix(aRange, bRange FileRange, normalized bool) (
 	aRemaining, bRemaining FileRange, commonPrefix *BlockPair) {
 
 	aLineCount, bLineCount := aRange.GetLineCount(), bRange.GetLineCount()
-	limit := minInt(aLineCount, bLineCount)
+	limit := MinInt(aLineCount, bLineCount)
 	isContiguous := aRange.IsContiguous() && bRange.IsContiguous()
 
 	glog.Info("MatchCommonPrefix: ", aLineCount, " lines from A, ",
@@ -77,7 +77,7 @@ func MatchCommonSuffix(aRange, bRange FileRange, normalized bool) (
 	aRemaining, bRemaining FileRange, commonSuffix *BlockPair) {
 
 	aLineCount, bLineCount := aRange.GetLineCount(), bRange.GetLineCount()
-	limit := minInt(aLineCount, bLineCount)
+	limit := MinInt(aLineCount, bLineCount)
 	isContiguous := aRange.IsContiguous() && bRange.IsContiguous()
 
 	glog.Info("MatchCommonSuffix: ", aLineCount, " lines from A, ",

@@ -117,7 +117,7 @@ func FormatInterleaved(pairs []*BlockPair, aIsPrimary bool, aFile, bFile *File,
 	} else {
 		SortBlockPairsByBIndex(pairs)
 	}
-	maxDigits := DigitCount(maxInt(aFile.GetLineCount(), bFile.GetLineCount()))
+	maxDigits := DigitCount(MaxInt(aFile.GetLineCount(), bFile.GetLineCount()))
 	inMove := false
 	for bn, bp := range pairs {
 		glog.V(3).Infof("FormatInterleaved processing %d: %v", bp)

@@ -94,14 +94,14 @@ func ReadFile(name string) (*File, error) {
 			hash, normalizedHash := hasher.Compute2(line, unindentedLine)
 			normalizedLine := normalizeLine(unindentedLine)
 			normalizedLength := len(normalizedLine)
-			probablyCommon := normalizedLength == 0 || computeIsProbablyCommon(normalizedLine)
+			probablyCommon := normalizedLength == 0 || ComputeIsProbablyCommon(normalizedLine)
 			p.Lines = append(p.Lines, LinePos{
 				Start:            pos,
 				Length:           length,
 				Index:            index,
 				Hash:             hash,
 				NormalizedHash:   normalizedHash,
-				NormalizedLength: uint8(minInt(normalizedLength, 255)),
+				NormalizedLength: uint8(MinInt(normalizedLength, 255)),
 				ProbablyCommon:   probablyCommon,
 			})
 			pos += length

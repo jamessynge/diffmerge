@@ -19,7 +19,7 @@ import (
 //	    _, ew.err = ew.w.Write(buf)
 //	}
 
-func minInt(i, j int) int {
+func MinInt(i, j int) int {
 	if i < j {
 		return i
 	} else {
@@ -27,7 +27,7 @@ func minInt(i, j int) int {
 	}
 }
 
-func maxInt(i, j int) int {
+func MaxInt(i, j int) int {
 	if i < j {
 		return j
 	} else {
@@ -35,7 +35,7 @@ func maxInt(i, j int) int {
 	}
 }
 
-func maxFloat32(u, v float32) float32 {
+func MaxFloat32(u, v float32) float32 {
 	if u < v {
 		return v
 	} else {
@@ -43,7 +43,7 @@ func maxFloat32(u, v float32) float32 {
 	}
 }
 
-func max3Float32(u, v, w float32) float32 {
+func Max3Float32(u, v, w float32) float32 {
 	if u < v {
 		if v < w {
 			return w
@@ -197,9 +197,10 @@ func init() {
 	wellKnownCommonLines["}"] = true
 	wellKnownCommonLines["["] = true
 	wellKnownCommonLines["]"] = true
+	wellKnownCommonLines[""] = true
 }
 
-func computeIsProbablyCommon(normalizedLine []byte) bool {
+func ComputeIsProbablyCommon(normalizedLine []byte) bool {
 	if len(normalizedLine) >= 3 {
 		return false
 	}
@@ -208,7 +209,7 @@ func computeIsProbablyCommon(normalizedLine []byte) bool {
 
 func computeNumRareLinesInRange(
 	fr FileRange, omitProbablyCommon bool, maxCountInFile int) (num int) {
-	maxCountInFile = maxInt(1, maxCountInFile)
+	maxCountInFile = MaxInt(1, maxCountInFile)
 	for n := 0; n < fr.GetLineCount(); n++ {
 		lp := fr.GetLinePosRelative(n)
 		if omitProbablyCommon && lp.ProbablyCommon {
