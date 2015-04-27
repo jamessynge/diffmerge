@@ -17,7 +17,7 @@ type simpleDiffer struct {
 
 func MakeSimpleDiffer(baseRangePair *FileRangePair) *simpleDiffer {
 	p := &simpleDiffer{
-		baseRangePair:              baseRangePair,
+		baseRangePair: baseRangePair,
 	}
 	return p
 }
@@ -55,10 +55,6 @@ func (p *simpleDiffer) ConvertMiddleOffsets(aMiddleOffset, bMiddleOffset int) (a
 	return p.middleRangePair.ToFileIndices(aMiddleOffset, bMiddleOffset)
 }
 
-
-
-
-
 //func (p *simpleDiffer) CompareBaseLines(aOffset, bOffset int) (equal, approx, rare bool) {
 //	return p.CompareFileLines(p.ConvertBaseOffsets(aOffset, bOffset))
 //}
@@ -74,7 +70,6 @@ func (p *simpleDiffer) BaseRangesAreNotEmpty() bool {
 func (p *simpleDiffer) MiddleRangesAreNotEmpty() bool {
 	return p.middleRangePair.BothAreNotEmpty()
 }
-
 
 /*
 func (p *simpleDiffer) SetMiddlePairsFromIndexPairs(
