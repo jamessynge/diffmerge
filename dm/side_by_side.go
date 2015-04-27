@@ -94,8 +94,8 @@ func (state *sideBySideState) initialize() {
 	availableOutputColumns := state.cfg.DisplayColumns - 3
 
 	if state.cfg.DisplayLineNumbers {
-		state.aDigitColumns = DigitCount(MaxInt(2, state.aFile.GetLineCount()))
-		state.bDigitColumns = DigitCount(MaxInt(2, state.bFile.GetLineCount()))
+		state.aDigitColumns = DigitCount(MaxInt(2, state.aFile.LineCount()))
+		state.bDigitColumns = DigitCount(MaxInt(2, state.bFile.LineCount()))
 		availableOutputColumns -= (state.aDigitColumns + state.bDigitColumns + 2)
 	} else {
 		state.aDigitColumns = 0

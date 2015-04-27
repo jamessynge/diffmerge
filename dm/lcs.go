@@ -15,6 +15,7 @@ import (
 // the basic LCS approach is that it doesn't consider any measure other than
 // number of symbols (and here the weight of pairs of symbols), but doesn't
 // have any other objective function.
+// TODO Lots of opportunity here for (well known) optimizations.
 func WeightedLCS(aLength, bLength int, getSimilarity func(aIndex, bIndex int) float32) (
 	result []IndexPair) {
 

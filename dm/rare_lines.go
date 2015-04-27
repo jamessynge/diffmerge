@@ -14,11 +14,11 @@ func FindRareLinesInRanges(aRange, bRange FileRange,
 	maxCountInRange, maxCountInFile int) (aRareLines, bRareLines []LinePos) {
 	var aHashPositions, bHashPositions HashPositions
 	if normalizedMatch {
-		aHashPositions = aRange.GetNormalizedHashPositions()
-		bHashPositions = bRange.GetNormalizedHashPositions()
+		aHashPositions = aRange.NormalizedHashPositions()
+		bHashPositions = bRange.NormalizedHashPositions()
 	} else {
-		aHashPositions = aRange.GetHashPositions()
-		bHashPositions = bRange.GetHashPositions()
+		aHashPositions = aRange.HashPositions()
+		bHashPositions = bRange.HashPositions()
 	}
 
 	rareHashes := make(map[uint32]bool)

@@ -59,25 +59,22 @@ type LinePos struct {
 	ProbablyCommon bool // Based solely on normalized content, not other lines.
 }
 
+type IndexPair struct {
+	Index1, Index2 int
+}
+
+// Define BlockMatches U and V in matches to be "adjacent matches"
+// when there exist integers i and j such that:
+//      matchesByA[i] == U      matchesByA[i + 1] == V
+//      matchesByB[j] == U      matchesByB[j + 1] == V
+// We want to identify such adjacent matches because we can then be
+// confident in emiting a conflict, insertion or deletion between
+// two, rather than there being a likelihood that the gap between the
+// two represents a move.
+
 // Represents a match between files A and B.
 type BlockMatch struct {
 	// Index is same as LinePos.Index of starting line of match.
 	// Length is number of lines that match.
 	AIndex, BIndex, Length int
-}
-
-// Represents a pairing of ranges in files A and B, primarily for output,
-// as we can produce different pairings based on which file we consider
-// primary (i.e. in the face of block moves we may print A in order, but
-// B out of order).
-type BlockPair struct {
-	AIndex, ALength   int
-	BIndex, BLength   int
-	IsMatch           bool
-	IsNormalizedMatch bool
-	IsMove            bool // Does this represent a move?
-}
-
-type IndexPair struct {
-	Index1, Index2 int
 }

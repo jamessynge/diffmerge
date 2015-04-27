@@ -14,45 +14,28 @@ type MatchCommonXFunc func(aRange, bRange FileRange, normalized bool) (
 func MatchCommonPrefix(aRange, bRange FileRange, normalized bool) (
 	aRemaining, bRemaining FileRange, commonPrefix *BlockPair) {
 
-	aLineCount, bLineCount := aRange.GetLineCount(), bRange.GetLineCount()
+	aLineCount, bLineCount := aRange.LineCount(), bRange.LineCount()
 	limit := MinInt(aLineCount, bLineCount)
-	isContiguous := aRange.IsContiguous() && bRange.IsContiguous()
 
 	glog.Info("MatchCommonPrefix: ", aLineCount, " lines from A, ",
 		bLineCount, " lines from B, limit of ", limit,
-		chooseString(normalized, "; comparing normalized lines", ""),
-		chooseString(isContiguous, "; lines may not be contiguous", ""))
+		chooseString(normalized, "; comparing normalized lines", ""))
 
 	length := 0
-	var ai, bi int
 	for ; length < limit; length++ {
-		ah := aRange.GetLineHashRelative(length, normalized)
-		bh := bRange.GetLineHashRelative(length, normalized)
+		ah := aRange.LineHashAtOffset(length, normalized)
+		bh := bRange.LineHashAtOffset(length, normalized)
 		if ah != bh {
 			break
-		}
-		if !isContiguous {
-			aLP := aRange.GetLinePosRelative(length)
-			bLP := bRange.GetLinePosRelative(length)
-			if length > 0 {
-				if aLP.Index != ai+1 || bLP.Index != bi+1 {
-					// The lines aren't immediately adjacent.
-					break
-				}
-				ai++
-				bi++
-			} else {
-				ai, bi = aLP.Index, bLP.Index
-			}
 		}
 	}
 	if length == 0 {
 		return aRange, bRange, nil
 	}
 	commonPrefix = &BlockPair{
-		AIndex:            aRange.GetLinePosRelative(0).Index,
+		AIndex:            aRange.LinePosAtOffset(0).Index,
 		ALength:           length,
-		BIndex:            bRange.GetLinePosRelative(0).Index,
+		BIndex:            bRange.LinePosAtOffset(0).Index,
 		BLength:           length,
 		IsMatch:           !normalized,
 		IsNormalizedMatch: normalized,
@@ -61,10 +44,10 @@ func MatchCommonPrefix(aRange, bRange FileRange, normalized bool) (
 	glog.Infof("MatchCommonPrefix: emit BlockPair: %v", *commonPrefix)
 
 	if length < aLineCount {
-		aRemaining = aRange.GetSubRange(length, aLineCount-length)
+		aRemaining = aRange.MakeSubRange(length, aLineCount-length)
 	}
 	if length < bLineCount {
-		bRemaining = bRange.GetSubRange(length, bLineCount-length)
+		bRemaining = bRange.MakeSubRange(length, bLineCount-length)
 	}
 	return
 }
@@ -76,37 +59,20 @@ func MatchCommonPrefix(aRange, bRange FileRange, normalized bool) (
 func MatchCommonSuffix(aRange, bRange FileRange, normalized bool) (
 	aRemaining, bRemaining FileRange, commonSuffix *BlockPair) {
 
-	aLineCount, bLineCount := aRange.GetLineCount(), bRange.GetLineCount()
+	aLineCount, bLineCount := aRange.LineCount(), bRange.LineCount()
 	limit := MinInt(aLineCount, bLineCount)
-	isContiguous := aRange.IsContiguous() && bRange.IsContiguous()
 
 	glog.Info("MatchCommonSuffix: ", aLineCount, " lines from A, ",
 		bLineCount, " lines from B, limit of ", limit,
-		chooseString(normalized, "; comparing normalized lines", ""),
-		chooseString(isContiguous, "; lines may not be contiguous", ""))
+		chooseString(normalized, "; comparing normalized lines", ""))
 
 	length := 0
 	aOffset, bOffset := aLineCount-1, bLineCount-1
-	var ai, bi int
 	for length < limit {
-		ah := aRange.GetLineHashRelative(aOffset, normalized)
-		bh := bRange.GetLineHashRelative(bOffset, normalized)
+		ah := aRange.LineHashAtOffset(aOffset, normalized)
+		bh := bRange.LineHashAtOffset(bOffset, normalized)
 		if ah != bh {
 			break
-		}
-		if !isContiguous {
-			aLP := aRange.GetLinePosRelative(aOffset)
-			bLP := bRange.GetLinePosRelative(bOffset)
-			if length > 0 {
-				if aLP.Index != ai-1 || bLP.Index != bi-1 {
-					// The lines aren't immediately adjacent.
-					break
-				}
-				ai--
-				bi--
-			} else {
-				ai, bi = aLP.Index, bLP.Index
-			}
 		}
 		length++
 		aOffset--
@@ -118,9 +84,9 @@ func MatchCommonSuffix(aRange, bRange FileRange, normalized bool) (
 	aOffset++
 	bOffset++
 	commonSuffix = &BlockPair{
-		AIndex:            aRange.GetLinePosRelative(aOffset).Index,
+		AIndex:            aRange.LinePosAtOffset(aOffset).Index,
 		ALength:           length,
-		BIndex:            bRange.GetLinePosRelative(bOffset).Index,
+		BIndex:            bRange.LinePosAtOffset(bOffset).Index,
 		BLength:           length,
 		IsMatch:           !normalized,
 		IsNormalizedMatch: normalized,
@@ -129,10 +95,10 @@ func MatchCommonSuffix(aRange, bRange FileRange, normalized bool) (
 	glog.Infof("MatchCommonSuffix: emit BlockPair: %v", *commonSuffix)
 
 	if length < aLineCount {
-		aRemaining = aRange.GetSubRange(0, length)
+		aRemaining = aRange.MakeSubRange(0, length)
 	}
 	if length < bLineCount {
-		bRemaining = bRange.GetSubRange(0, length)
+		bRemaining = bRange.MakeSubRange(0, length)
 	}
 	return
 }
@@ -146,7 +112,7 @@ func MatchCommonEnds(aRange, bRange FileRange, prefix, suffix, normalized bool) 
 	}
 
 	glog.Infof("MatchCommonEnds A lines: %d; B lines: %d; prefix: %v; suffix: %v; normalized: %v",
-		aRange.GetLineCount(), bRange.GetLineCount(),
+		aRange.LineCount(), bRange.LineCount(),
 		prefix, suffix, normalized)
 
 	tryMatch := func(matcher MatchCommonXFunc) (done bool) {
@@ -157,20 +123,20 @@ func MatchCommonEnds(aRange, bRange FileRange, prefix, suffix, normalized bool) 
 		}
 		pairs = append(pairs, bp)
 		if aRest == nil {
-			glog.Infof("MatchCommonEnds: matched ALL %d lines of aRange", aRange.GetLineCount())
+			glog.Infof("MatchCommonEnds: matched ALL %d lines of aRange", aRange.LineCount())
 			done = true
 		} else {
-			before, after := aRange.GetLineCount(), aRest.GetLineCount()
+			before, after := aRange.LineCount(), aRest.LineCount()
 			if after != before {
 				glog.Infof("MatchCommonEnds: matched %d lines of %d, leaving %d  (aRange)",
 					before-after, before, after)
 			}
 		}
 		if bRest == nil {
-			glog.Infof("MatchCommonEnds: matched ALL %d lines of bRange", bRange.GetLineCount())
+			glog.Infof("MatchCommonEnds: matched ALL %d lines of bRange", bRange.LineCount())
 			done = true
 		} else {
-			before, after := bRange.GetLineCount(), bRest.GetLineCount()
+			before, after := bRange.LineCount(), bRest.LineCount()
 			if after != before {
 				glog.Infof("MatchCommonEnds: matched %d lines of %d, leaving %d  (bRange)",
 					before-after, before, after)

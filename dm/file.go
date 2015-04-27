@@ -24,7 +24,7 @@ func (p *File) GetFullRange() FileRange {
 	return p.fullRange
 }
 
-func (p *File) GetSubRange(start, length int) FileRange {
+func (p *File) MakeSubRange(start, length int) FileRange {
 	return CreateFileRange(p, start, length)
 }
 
@@ -66,7 +66,7 @@ func (p *File) GetNormalizedHashOfLine(n int) uint32 {
 	return p.Lines[n].NormalizedHash
 }
 
-func (p *File) GetLineCount() int {
+func (p *File) LineCount() int {
 	return len(p.Lines)
 }
 
@@ -128,6 +128,6 @@ func ReadFile(name string) (*File, error) {
 		}
 	}
 
-	p.fullRange = CreateFileRange(p, 0, p.GetLineCount())
+	p.fullRange = CreateFileRange(p, 0, p.LineCount())
 	return p, nil
 }

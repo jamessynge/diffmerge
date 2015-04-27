@@ -50,7 +50,7 @@ func PerformDiff(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPa
 		aRange:     aFile.GetFullRange(),
 		bRange:     bFile.GetFullRange(),
 		//		aRemainingCount: aFile.GetLineCount(),
-		bRemainingCount: bFile.GetLineCount(),
+		bRemainingCount: bFile.LineCount(),
 		config:          config,
 	}
 
@@ -214,6 +214,9 @@ type diffState struct {
 
 	// Controls operation.
 	config DifferencerConfig
+
+	// Each time we identify a move, we label it with a unique id.
+	lastMoveId int
 }
 
 func (p *diffState) someRangeIsEmpty() bool {
@@ -277,11 +280,11 @@ func (p *diffState) exp_phase5_moves_and_copies() {
 	minExtraBLinesForProcessing := 3
 
 	p.processAllGapsInB(true, func() {
-		numBRangeLines := p.bRange.GetLineCount()
-		extraBLines := numBRangeLines - p.aRange.GetLineCount()
+		numBRangeLines := p.bRange.LineCount()
+		extraBLines := numBRangeLines - p.aRange.LineCount()
 
 		glog.Infof("Processing gap of %d A lines, %d B lines, with %d extra B lines:\nB BlockPair before: %v\nB BlockPair after: %v",
-			p.aRange.GetLineCount(), numBRangeLines,
+			p.aRange.LineCount(), numBRangeLines,
 			extraBLines, p.pairBeforeGap, p.pairAfterGap)
 
 		if extraBLines < minExtraBLinesForProcessing {
@@ -364,6 +367,7 @@ func countALinesInPairs(pairs []*BlockPair) (count int) {
 }
 
 type MoveCandidate struct {
+	aRange, bRange  FileRange
 	pairs           []*BlockPair
 	limitsInA       IndexPair
 	limitsInB       IndexPair
@@ -374,10 +378,18 @@ func (p *MoveCandidate) AExtent() int {
 	return p.limitsInA.Index2 - p.limitsInA.Index1
 }
 
+// Find common prefixes and suffixes between the pairs.
+// Should really refactor diffState etc. to allow recursive use of diffState.
+func (p *MoveCandidate) ExtendPairs(state *diffState) {
+
+}
+
 // Pairs must be sorted ascending in both AIndex and BIndex (i.e. no crossings).
-func MakeMoveCandidate(pairs []*BlockPair) *MoveCandidate {
+func MakeMoveCandidate(aRange, bRange FileRange, pairs []*BlockPair) *MoveCandidate {
 	return &MoveCandidate{
-		pairs: pairs,
+		aRange: aRange,
+		bRange: bRange,
+		pairs:  pairs,
 		limitsInA: IndexPair{
 			Index1: pairs[0].AIndex,
 			Index2: pairs[len(pairs)-1].ABeyond(),
@@ -479,7 +491,7 @@ func (p *diffState) exp_phase4_moves() (multipleCandidatesFound bool) {
 		}
 
 		glog.Infof("Searching gaps in B that match gap %d in A, [%d, %d)",
-			an, aRange.GetStartLine(), aRange.GetLineCount()+aRange.GetStartLine())
+			an, aRange.FirstIndex(), aRange.LineCount()+aRange.FirstIndex())
 
 		var candidates MoveCandidates
 		for bn, bRange := range bGapRanges {
@@ -490,7 +502,7 @@ func (p *diffState) exp_phase4_moves() (multipleCandidatesFound bool) {
 			}
 
 			glog.Infof("Comparing gap %d in A against gap %d in B, [%d, %d)",
-				an, bn, bRange.GetStartLine(), bRange.GetLineCount()+bRange.GetStartLine())
+				an, bn, bRange.FirstIndex(), bRange.LineCount()+bRange.FirstIndex())
 
 			p.aRange = aRange
 			p.bRange = bRange
@@ -505,7 +517,7 @@ func (p *diffState) exp_phase4_moves() (multipleCandidatesFound bool) {
 			// adjacent non-rare lines also match, does that increase our confidence
 			// in the match?
 
-			candidate := MakeMoveCandidate(newPairs)
+			candidate := MakeMoveCandidate(aRange, bRange, newPairs)
 			candidates = append(candidates, candidate)
 
 			glog.Infof("Found match of %d lines, extending over %d lines, in the A gap",
@@ -547,8 +559,10 @@ func (p *diffState) exp_phase4_moves() (multipleCandidatesFound bool) {
 	}
 
 	for _, mc := range acceptedMoveCandidates {
+		p.lastMoveId++
 		for _, pair := range mc.pairs {
 			pair.IsMove = true
+			pair.MoveId = p.lastMoveId
 			p.addBlockPair(pair)
 		}
 	}
@@ -700,8 +714,8 @@ func (p *diffState) matchBetweenPairsAndMaybeBackoff(
 		p.bRange = oldBRange
 	}()
 
-	p.aRange = p.aFullRange.GetSubRange(aStart, aLength)
-	p.bRange = p.bFullRange.GetSubRange(bStart, bLength)
+	p.aRange = p.aFullRange.MakeSubRange(aStart, aLength)
+	p.bRange = p.bFullRange.MakeSubRange(bStart, bLength)
 
 	/*
 		glog.V(1).Info("matchBetweenPairsAndMaybeBackoff performing backoff")
@@ -739,10 +753,6 @@ func (p *diffState) matchRangeEndsAndMaybeBackoff(performBackoff bool) bool {
 	glog.V(1).Info("matchRangeEndsAndMaybeBackoff enter, config:\n", spew.Sdump(p.config))
 
 	aRange, bRange := p.aRange, p.bRange
-	if !aRange.IsContiguous() || !bRange.IsContiguous() {
-		glog.Fatalf("Why are these not both contiguous?\naRange: %v\nbRange: %v",
-			aRange, bRange)
-	}
 
 	startingCount := p.bRemainingCount
 
@@ -776,14 +786,14 @@ func (p *diffState) matchRangeEndsAndMaybeBackoff(performBackoff bool) bool {
 	// Should have a more efficient way to do this, but this uses the machinery
 	// already built...  (i.e. I really just want the new BlockPairs on either
 	// side of the new p.aRange and p.bRange).
-	aStart, bStart := aRange.GetStartLine(), bRange.GetStartLine()
-	aBeyond, bBeyond := aStart+aRange.GetLineCount(), bStart+bRange.GetLineCount()
+	aStart, bStart := aRange.FirstIndex(), bRange.FirstIndex()
+	aBeyond, bBeyond := aStart+aRange.LineCount(), bStart+bRange.LineCount()
 
 	glog.V(1).Info("matchRangeEndsAndMaybeBackoff performing backoff")
 
 	isTargetRange := func() bool {
-		newAStart, newBStart := p.aRange.GetStartLine(), p.bRange.GetStartLine()
-		newABeyond, newBBeyond := newAStart+p.aRange.GetLineCount(), newBStart+p.bRange.GetLineCount()
+		newAStart, newBStart := p.aRange.FirstIndex(), p.bRange.FirstIndex()
+		newABeyond, newBBeyond := newAStart+p.aRange.LineCount(), newBStart+p.bRange.LineCount()
 		return aStart <= newAStart && newABeyond <= aBeyond && bStart <= newBStart && newBBeyond <= bBeyond
 	}
 
@@ -872,36 +882,29 @@ func (p *diffState) convertMatchesToBlockPairs(
 	aLines, bLines []LinePos, normalize bool, matches []BlockMatch) (
 	newPairs []*BlockPair) {
 	// Convert these to BlockPairs. Since they aren't necessarily contiguous,
-	// and there might be moves, we'll process them line by line, building
-	// BlockPairs that are contiguous.
-
+	// we'll process them line by line, building BlockPairs that are contiguous.
 	convertIndices := func(ai, bi int) (aIndex, bIndex int) {
 		return aLines[ai].Index, bLines[bi].Index
 	}
-
 	SortBlockMatchesByBIndex(matches)
-	var prevPair *BlockPair
+	var pair *BlockPair
 	for i, m := range matches {
 		glog.V(1).Infof("matches[%d] = %v", i, m)
-		var pair *BlockPair
 		for n := 0; n < m.Length; n++ {
 			ai, bi := convertIndices(m.AIndex+n, m.BIndex+n)
 			isExactMatch := (!normalize ||
 				p.aFile.GetHashOfLine(ai) == p.bFile.GetHashOfLine(bi))
 			// Can we just grow the current BlockPair?
-			if pair != nil {
-				if pair.IsMatch == isExactMatch && pair.AIndex+pair.ALength == ai && pair.BIndex+pair.BLength == bi {
-					// Yes, so just increase the length.
-					glog.V(1).Info("Growing BlockPair")
-					pair.ALength++
-					pair.BLength++
-					continue
-				}
-				// No, so add pair and start a new one.
-				newPairs = append(newPairs, pair)
-				prevPair = pair
+			if pair != nil && pair.IsMatch == isExactMatch &&
+				pair.AIndex+pair.ALength == ai &&
+				pair.BIndex+pair.BLength == bi {
+				// Yes, so just increase the length.
+				glog.V(1).Info("Growing BlockPair")
+				pair.ALength++
+				pair.BLength++
+				continue
 			}
-			isMove := prevPair != nil && (prevPair.AIndex+prevPair.ALength > ai || prevPair.BIndex+prevPair.BLength > bi)
+			// Create a new pair.
 			pair = &BlockPair{
 				AIndex:            ai,
 				ALength:           1,
@@ -909,11 +912,9 @@ func (p *diffState) convertMatchesToBlockPairs(
 				BLength:           1,
 				IsMatch:           isExactMatch,
 				IsNormalizedMatch: !isExactMatch,
-				IsMove:            isMove,
 			}
+			newPairs = append(newPairs, pair)
 		}
-		newPairs = append(newPairs, pair)
-		prevPair = pair
 	}
 	return
 }
@@ -938,9 +939,9 @@ func (p *diffState) rangeToBlockPairs() (newPairs []*BlockPair) {
 			p.config.requireSameRarity, p.config.omitProbablyCommonLines,
 			p.config.maxRareLineOccurrencesInRange, p.config.maxRareLineOccurrencesInFile)
 		glog.V(1).Info("rangeToBlockPairs found ", len(aLines), " rare lines in A, of ",
-			p.aRange.GetLineCount(), " middle lines")
+			p.aRange.LineCount(), " middle lines")
 		glog.V(1).Info("rangeToBlockPairs found ", len(bLines), " rare lines in B, of ",
-			p.bRange.GetLineCount(), " middle lines")
+			p.bRange.LineCount(), " middle lines")
 		if len(aLines) == 0 || len(bLines) == 0 {
 			return
 		}
@@ -1138,13 +1139,13 @@ func makeBOrderIndex(pairs []*BlockPair) (pairsByB []*BlockPair, pair2BOrder map
 
 func (p *diffState) getGapBetweenAIndices(p1, p2 *BlockPair) (start, length int) {
 	if p1 == nil {
-		start = p.aFullRange.GetStartLine()
+		start = p.aFullRange.FirstIndex()
 	} else {
 		start = p1.AIndex + p1.ALength
 	}
 	var p2Start int
 	if p2 == nil {
-		p2Start = p.aFile.GetLineCount()
+		p2Start = p.aFile.LineCount()
 	} else {
 		p2Start = p2.AIndex
 	}
@@ -1156,14 +1157,14 @@ func (p *diffState) getGapBetweenAIndices(p1, p2 *BlockPair) (start, length int)
 
 func (p *diffState) getGapBetweenBIndices(p1, p2 *BlockPair) (start, length int) {
 	if p1 == nil {
-		start = p.bFullRange.GetStartLine()
+		start = p.bFullRange.FirstIndex()
 	} else {
 		start = p1.BIndex + p1.BLength
 	}
 	var p2Start int
 	if p2 == nil {
 		// TODO Consistently convert to using *FullRange instead of *File?
-		p2Start = p.bFile.GetLineCount()
+		p2Start = p.bFile.LineCount()
 	} else {
 		p2Start = p2.BIndex
 	}
@@ -1196,7 +1197,7 @@ func (p *diffState) computeGapInAWithB(aPair1, aPair2 *BlockPair,
 	if aPair1 == nil && aPair2 == nil {
 		// There must be a complete mismatch between A and B so far.
 		p.assertNoPairs()
-		return 0, p.aFile.GetLineCount(), 0, p.bFile.GetLineCount()
+		return 0, p.aFile.LineCount(), 0, p.bFile.LineCount()
 	}
 	aStart, aLength = p.getGapBetweenAIndices(aPair1, aPair2)
 	if aLength == 0 {
@@ -1286,7 +1287,7 @@ func (p *diffState) computeGapInBWithA(bPair1, bPair2 *BlockPair,
 	if bPair1 == nil && bPair2 == nil {
 		// There must be a complete mismatch between B and A so far.
 		p.assertNoPairs()
-		return 0, p.bFile.GetLineCount(), 0, p.aFile.GetLineCount()
+		return 0, p.bFile.LineCount(), 0, p.aFile.LineCount()
 	}
 	bStart, bLength = p.getGapBetweenBIndices(bPair1, bPair2)
 	if bLength == 0 {
@@ -1380,14 +1381,14 @@ func (p *diffState) gapsInAToARanges() (ranges []FileRange) {
 		pair := p.pairs[n]
 		if ai < pair.AIndex {
 			// Found a gap.
-			newRange := p.aFullRange.GetSubRange(ai, pair.AIndex-ai)
+			newRange := p.aFullRange.MakeSubRange(ai, pair.AIndex-ai)
 			ranges = append(ranges, newRange)
 		}
 		ai = MaxInt(ai, pair.ABeyond())
 	}
-	if ai < p.aFullRange.GetLineCount() {
+	if ai < p.aFullRange.LineCount() {
 		// Gap at the end.
-		newRange := p.aFullRange.GetSubRange(ai, p.aFullRange.GetLineCount()-ai)
+		newRange := p.aFullRange.MakeSubRange(ai, p.aFullRange.LineCount()-ai)
 		ranges = append(ranges, newRange)
 	}
 	return
@@ -1402,14 +1403,14 @@ func (p *diffState) gapsInBToBRanges() (ranges []FileRange) {
 		pair := p.pairs[n]
 		if bi < pair.BIndex {
 			// Found a gap.
-			newRange := p.bFullRange.GetSubRange(bi, pair.BIndex-bi)
+			newRange := p.bFullRange.MakeSubRange(bi, pair.BIndex-bi)
 			ranges = append(ranges, newRange)
 		}
 		bi = MaxInt(bi, pair.BBeyond())
 	}
-	if bi < p.bFullRange.GetLineCount() {
+	if bi < p.bFullRange.LineCount() {
 		// Gap at the end.
-		newRange := p.bFullRange.GetSubRange(bi, p.bFullRange.GetLineCount()-bi)
+		newRange := p.bFullRange.MakeSubRange(bi, p.bFullRange.LineCount()-bi)
 		ranges = append(ranges, newRange)
 	}
 	return
@@ -1449,12 +1450,12 @@ func (p *diffState) fillAGaps() {
 		}
 		ai = bp.AIndex + bp.ALength
 	}
-	if ai < p.aFile.GetLineCount() {
+	if ai < p.aFile.LineCount() {
 		// Gap at the end.
 		pair := &BlockPair{
 			AIndex:            ai,
-			ALength:           p.aFile.GetLineCount() - ai,
-			BIndex:            p.bFile.GetLineCount(),
+			ALength:           p.aFile.LineCount() - ai,
+			BIndex:            p.bFile.LineCount(),
 			BLength:           0,
 			IsMatch:           false,
 			IsMove:            false,
@@ -1501,13 +1502,13 @@ func (p *diffState) fillBGaps() {
 		}
 		bi = bp.BIndex + bp.BLength
 	}
-	if bi < p.bFile.GetLineCount() {
+	if bi < p.bFile.LineCount() {
 		// Gap at the end.
 		pair := &BlockPair{
-			AIndex:            p.aFile.GetLineCount(),
+			AIndex:            p.aFile.LineCount(),
 			ALength:           0,
 			BIndex:            bi,
-			BLength:           p.bFile.GetLineCount() - bi,
+			BLength:           p.bFile.LineCount() - bi,
 			IsMatch:           false,
 			IsMove:            false,
 			IsNormalizedMatch: false,

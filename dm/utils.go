@@ -79,6 +79,8 @@ func SelectHashGetter(normalized bool) func(lp LinePos) uint32 {
 	}
 }
 
+////////////////////////////////////////////////////////////////////////////////
+
 // BlockMatchByAIndex implements sort.Interface for []BlockMatch based on
 // the AIndex field, then BIndex.
 type BlockMatchByAIndex []BlockMatch
@@ -111,6 +113,42 @@ func SortBlockMatchesByBIndex(a []BlockMatch) {
 	sort.Sort(BlockMatchByBIndex(a))
 }
 
+////////////////////////////////////////////////////////////////////////////////
+
+// IndexPairByIndex1 implements sort.Interface for []IndexPair based on
+// the Index1 field, then Index2.
+type IndexPairByIndex1 []IndexPair
+
+func (a IndexPairByIndex1) Len() int      { return len(a) }
+func (a IndexPairByIndex1) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a IndexPairByIndex1) Less(i, j int) bool {
+	if a[i].Index1 != a[j].Index1 {
+		return a[i].Index1 < a[j].Index1
+	}
+	return a[i].Index2 < a[j].Index2
+}
+func SortIndexPairsByIndex1(a []IndexPair) {
+	sort.Sort(IndexPairByIndex1(a))
+}
+
+// IndexPairByIndex2 implements sort.Interface for []IndexPair based on
+// the Index2 field, then Index1.
+type IndexPairByIndex2 []IndexPair
+
+func (a IndexPairByIndex2) Len() int      { return len(a) }
+func (a IndexPairByIndex2) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a IndexPairByIndex2) Less(i, j int) bool {
+	if a[i].Index2 != a[j].Index2 {
+		return a[i].Index2 < a[j].Index2
+	}
+	return a[i].Index1 < a[j].Index1
+}
+func SortIndexPairsByIndex2(a []IndexPair) {
+	sort.Sort(IndexPairByIndex2(a))
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
 // BlockPairByAIndex implements sort.Interface for []BlockPair based on
 // the AIndex field, then BIndex.
 type BlockPairByAIndex []*BlockPair
@@ -118,16 +156,17 @@ type BlockPairByAIndex []*BlockPair
 func (a BlockPairByAIndex) Len() int      { return len(a) }
 func (a BlockPairByAIndex) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a BlockPairByAIndex) Less(i, j int) bool {
-	if a[i].AIndex != a[j].AIndex {
-		return a[i].AIndex < a[j].AIndex
+	pi, pj := a[i], a[j]
+	if pi.AIndex != pj.AIndex {
+		return pi.AIndex < pj.AIndex
 	}
-	if a[i].ALength != a[j].ALength {
-		return a[i].ALength < a[j].ALength
+	if pi.ALength != pj.ALength {
+		return pi.ALength < pj.ALength
 	}
-	if a[i].BIndex != a[j].BIndex {
-		return a[i].BIndex < a[j].BIndex
+	if pi.BIndex != pj.BIndex {
+		return pi.BIndex < pj.BIndex
 	}
-	return a[i].BIndex < a[j].BIndex
+	return pi.BIndex < pj.BIndex
 }
 func SortBlockPairsByAIndex(a []*BlockPair) {
 	sort.Sort(BlockPairByAIndex(a))
@@ -140,20 +179,23 @@ type BlockPairByBIndex []*BlockPair
 func (a BlockPairByBIndex) Len() int      { return len(a) }
 func (a BlockPairByBIndex) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a BlockPairByBIndex) Less(i, j int) bool {
-	if a[i].BIndex != a[j].BIndex {
-		return a[i].BIndex < a[j].BIndex
+	pi, pj := a[i], a[j]
+	if pi.BIndex != pj.BIndex {
+		return pi.BIndex < pj.BIndex
 	}
-	if a[i].BLength != a[j].BLength {
-		return a[i].BLength < a[j].BLength
+	if pi.BLength != pj.BLength {
+		return pi.BLength < pj.BLength
 	}
-	if a[i].AIndex != a[j].AIndex {
-		return a[i].AIndex < a[j].AIndex
+	if pi.AIndex != pj.AIndex {
+		return pi.AIndex < pj.AIndex
 	}
-	return a[i].ALength < a[j].ALength
+	return pi.ALength < pj.ALength
 }
 func SortBlockPairsByBIndex(a []*BlockPair) {
 	sort.Sort(BlockPairByBIndex(a))
 }
+
+////////////////////////////////////////////////////////////////////////////////
 
 func DigitCount(i int) int {
 	c := 0
@@ -210,8 +252,8 @@ func ComputeIsProbablyCommon(normalizedLine []byte) bool {
 func computeNumRareLinesInRange(
 	fr FileRange, omitProbablyCommon bool, maxCountInFile int) (num int) {
 	maxCountInFile = MaxInt(1, maxCountInFile)
-	for n := 0; n < fr.GetLineCount(); n++ {
-		lp := fr.GetLinePosRelative(n)
+	for n := 0; n < fr.LineCount(); n++ {
+		lp := fr.LinePosAtOffset(n)
 		if omitProbablyCommon && lp.ProbablyCommon {
 			continue
 		}

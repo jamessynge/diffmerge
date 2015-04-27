@@ -9,40 +9,40 @@ import (
 // suffix lines of the files.
 
 type FileRange interface {
-	// Is the range made up of a sequence of adjacent lines (i.e. with no gaps,
-	// and no repeats)?
-	IsContiguous() bool
-
 	// Is the FileRange empty (GetLineCount() == 0)?
 	IsEmpty() bool
 
 	// Returns the number of lines in the range.
-	GetLineCount() int
+	LineCount() int
 
 	// Returns the index of the first line (zero for the whole file).
-	GetStartLine() int
+	FirstIndex() int
 
 	// Returns the LinePos for the line at offset within this range (where zero
 	// is the first line in the range).
-	GetLinePosRelative(offsetInRange int) LinePos
+	LinePosAtOffset(offsetInRange int) LinePos
 
 	// Returns the hash of the line (full or normalized) at the offset within this
 	// range (where zero is the first line in the range).
-	GetLineHashRelative(offsetInRange int, normalized bool) uint32
+	LineHashAtOffset(offsetInRange int, normalized bool) uint32
 
 	// Returns those lines for which fn returns true.
 	Select(fn func(lp LinePos) bool) []LinePos
 
 	// Returns the positions (line numbers, zero-based) within
 	// the underlying file at which the full line hashes appear.
-	GetHashPositions() map[uint32][]int
+	HashPositions() map[uint32][]int
 
 	// Returns the positions (line numbers, zero-based) within
 	// the underlying file at which the normalized line hashes appear.
-	GetNormalizedHashPositions() map[uint32][]int
+	NormalizedHashPositions() map[uint32][]int
 
-	// Returns a new FileRange for the specified subset.
-	GetSubRange(startOffsetInRange, length int) FileRange
+	// Returns a FileRange for the specified subset.
+	MakeSubRange(startOffsetInRange, length int) FileRange
+
+	ToFileIndex(offsetInRange int) (indexInFile int)
+	ToRangeOffset(indexInFile int) (offsetInRange int)
+	File() *File
 }
 
 func FileRangeIsEmpty(p FileRange) bool {
@@ -67,9 +67,9 @@ type fileRange struct {
 }
 
 func CreateFileRange(file *File, start, length int) FileRange {
-	if start < 0 || start+length > file.GetLineCount() {
+	if start < 0 || start+length > file.LineCount() {
 		glog.Fatalf("New range (%d, +%d) is invalid (max length %d)",
-			start, length, file.GetLineCount())
+			start, length, file.LineCount())
 	}
 	return &fileRange{
 		file:   file,
@@ -79,21 +79,20 @@ func CreateFileRange(file *File, start, length int) FileRange {
 	}
 }
 
-func (p *fileRange) GetLineCount() int {
+func (p *fileRange) LineCount() int {
 	if p == nil {
 		return 0
 	}
 	return p.length
 }
-func (p *fileRange) IsEmpty() bool      { return p == nil || p.GetLineCount() == 0 }
-func (p *fileRange) IsContiguous() bool { return true }
-func (p *fileRange) GetStartLine() int  { return p.start }
+func (p *fileRange) IsEmpty() bool   { return p == nil || p.LineCount() == 0 }
+func (p *fileRange) FirstIndex() int { return p.start }
 
-func (p *fileRange) GetLinePosRelative(offsetInRange int) LinePos {
+func (p *fileRange) LinePosAtOffset(offsetInRange int) LinePos {
 	return p.file.Lines[p.start+offsetInRange]
 }
 
-func (p *fileRange) GetLineHashRelative(offsetInRange int, normalized bool) uint32 {
+func (p *fileRange) LineHashAtOffset(offsetInRange int, normalized bool) uint32 {
 	lp := &p.file.Lines[p.start+offsetInRange]
 	if normalized {
 		return lp.NormalizedHash
@@ -102,7 +101,7 @@ func (p *fileRange) GetLineHashRelative(offsetInRange int, normalized bool) uint
 	}
 }
 
-func (p *fileRange) GetHashPositions() map[uint32][]int {
+func (p *fileRange) HashPositions() map[uint32][]int {
 	// Populate map if necessary.
 	if len(p.hashPositions) == 0 {
 		p.hashPositions = make(map[uint32][]int)
@@ -114,7 +113,7 @@ func (p *fileRange) GetHashPositions() map[uint32][]int {
 	return p.hashPositions
 }
 
-func (p *fileRange) GetNormalizedHashPositions() map[uint32][]int {
+func (p *fileRange) NormalizedHashPositions() map[uint32][]int {
 	// Populate map if necessary.
 	if len(p.normalizedHashPositions) == 0 {
 		p.normalizedHashPositions = make(map[uint32][]int)
@@ -137,7 +136,7 @@ func (p *fileRange) Select(fn func(lp LinePos) bool) []LinePos {
 	return result
 }
 
-func (p *fileRange) GetSubRange(startOffsetInRange, length int) FileRange {
+func (p *fileRange) MakeSubRange(startOffsetInRange, length int) FileRange {
 	if startOffsetInRange < 0 || startOffsetInRange+length > p.length {
 		glog.Fatalf("New range (%d, +%d) is invalid (max length %d)",
 			startOffsetInRange, length, p.length)
@@ -152,4 +151,27 @@ func (p *fileRange) GetSubRange(startOffsetInRange, length int) FileRange {
 		length: length,
 		beyond: start + length,
 	}
+}
+
+func (p *fileRange) ToFileIndex(offsetInRange int) (indexInFile int) {
+	// We assume here that File line indices start at 0, as do FileRange offsets.
+	if 0 <= offsetInRange && offsetInRange <= p.length {
+		return p.start + offsetInRange
+	}
+	glog.Fatalf("Offset %d is out of FileRange offsets [%d, %d)",
+		offsetInRange, 0, p.length)
+	return
+}
+
+func (p *fileRange) ToRangeOffset(indexInFile int) (offsetInRange int) {
+	if p.start <= indexInFile && indexInFile <= p.beyond {
+		return indexInFile - p.start
+	}
+	glog.Fatalf("Index %d is out of FileRange indices [%d, %d)",
+		indexInFile, p.start, p.beyond)
+	return
+}
+
+func (p *fileRange) File() *File {
+	return p.file
 }

@@ -7,7 +7,11 @@ import (
 type File interface {
 	Path() string
 	Body() []byte	
-	GetLine(n LineNo) Line
+	Line(n LineNo) Line
+
+	// Range covering the entire file.
+	FullRange() FileRange
+
 }
 
 
