@@ -29,3 +29,35 @@ import ()
 // that a tab represents (i.e. if that number is 4, then 0, 1, 2, and 3 will
 // be fairly common, but there should be a sharp drop in the frequency of 4
 // spaces).
+
+type LeadingWhitespaceStatistics struct {
+	NumLeadingTabs map[uint8]int
+	NumLeadingSpaces map[uint8]int
+	NumLeadingSpacesAfterTab map[uint8]int
+}
+
+func MeasureLeadingWhitespace(files ...*File) (stats LeadingWhitespaceStatistics) {
+	stats.NumLeadingTabs = make(map[uint8]int)
+	stats.NumLeadingSpaces = make(map[uint8]int)
+	stats.NumLeadingSpacesAfterTab = make(map[uint8]int)
+
+	for _, file := range files {
+		lines := file.Lines
+		for n := range lines {
+			lp := &lines[n]
+			lp.
+
+
+	return
+}
+
+
+
+
+
+
+
+
+
+
+//func GuessTabSpaces(
