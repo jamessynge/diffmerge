@@ -16,8 +16,8 @@ type FileRangePair struct {
 	// Full files
 	aFile, bFile *File
 
-	aRange, bRange   FileRange
-	aLength, bLength int
+	aRange, bRange                              FileRange
+	aLength, bLength                            int
 	rangesAreEqual, rangesAreApproximatelyEqual bool
 
 	// Lengths of the common (shared) prefix and suffix of the pair of ranges.
@@ -30,16 +30,15 @@ type FileRangePair struct {
 	// known here.
 	commonPrefixLength, commonSuffixLength int
 	rarePrefixLength, rareSuffixLength     int
-	haveMeasuredCommonEnds bool
-
+	haveMeasuredCommonEnds                 bool
 }
 
 func MakeFileRangePair(aFile, bFile *File, aRange, bRange FileRange) *FileRangePair {
 	p := &FileRangePair{
-		aFile:              aFile,
-		bFile:              bFile,
-		aRange:             aRange,
-		bRange:             bRange,
+		aFile:  aFile,
+		bFile:  bFile,
+		aRange: aRange,
+		bRange: bRange,
 	}
 	if !FileRangeIsEmpty(aRange) {
 		p.aLength = aRange.LineCount()
@@ -96,7 +95,7 @@ func (p *FileRangePair) RangesAreSame(onlyExactMatches bool) bool {
 // Only valid p.haveMeasuredCommonEnds is true.
 func (p *FileRangePair) RangesAreDifferent(approxIsDifferent bool) bool {
 	return (p.aLength != p.bLength || (approxIsDifferent && !p.rangesAreEqual) ||
-	 !p.rangesAreApproximatelyEqual)
+		!p.rangesAreApproximatelyEqual)
 }
 
 func (p *FileRangePair) ToFileIndices(aOffset, bOffset int) (aIndex, bIndex int) {
@@ -217,43 +216,36 @@ func (p *FileRangePair) MakeMiddleRangePair(rareEndsOnly bool) *FileRangePair {
 		glog.Fatalf("Middle range has not be measured for %s", p.BriefDebugString())
 	}
 	if p.PrefixAndSuffixOverlap(rareEndsOnly) {
+		// Caller needs to guide the process more directly.
 		cfg := spew.Config
 		cfg.MaxDepth = 2
 		glog.Fatalf("MakeMiddleRangePair(%v) prefix and suffix overlap; FileRangePair:\n%s",
 			cfg.Sdump(p))
 	}
 
-	p.aMiddleRange = nil
-	p.bMiddleRange = nil
-	p.aMiddleLength = 0
-	p.bMiddleLength = 0
+	var lo, suffixLength int
 
-	var aLo, aHi, bLo, bHi int
 	if rareEndsOnly {
-		if p.rarePrefixLength == 0 && p.rareSuffixLength == 0 {
-			return p
-		}
-		aLo = p.rarePrefixLength
-		aHi = p.aLength - p.rarePrefixLength
-		bHi = p.bLength - p.rareSuffixLength
+		lo = p.rarePrefixLength
+		suffixLength = p.rareSuffixLength
 	} else {
-		if p.rarePrefixLength == 0 && p.rareSuffixLength == 0 {
-			return p
-		}
-		aLo = p.commonPrefixLength
-		aHi = p.aLength - p.commonSuffixLength
-		bHi = p.bLength - p.commonSuffixLength
+		lo = p.commonPrefixLength
+		suffixLength = p.commonSuffixLength
 	}
-	bLo = aLo
+	if lo == 0 && suffixLength == 0 {
+		return p
+	}
+	aHi := p.aLength - suffixLength
+	bHi := p.bLength - suffixLength
 
-	return p.MakeSubRangePair(aLo, aHi - aLo, bLo, bHi - bLo)
+	return p.MakeSubRangePair(lo, aHi-lo, lo, bHi-lo)
 }
 
 type SimilarityFactors struct {
-	ExactRare float32
-	NormalizedRare float32
-	ExactNonRare float32
-	NormalizedNonRare float32
+	ExactRare          float32
+	NormalizedRare     float32
+	ExactNonRare       float32
+	NormalizedNonRare  float32
 	MaxRareOccurrences uint8
 }
 
@@ -298,24 +290,26 @@ func (p *FileRangePair) OffsetPairsToIndexPairs(offsetPairs []IndexPair) (indexP
 	return
 }
 
+// Assuming here that there are no moves (relative to aRange and bRange).
 func (p *FileRangePair) MatchingOffsetsToBlockPairs(
-	matchingOffsets []IndexPair, matchedNormalizedLines bool) (blockPairs []*BlockPair) {
-	// Assuming here that there are no moves (relative to aMiddleRange and bMiddleRange.
-	matchingIndices := p.OffsetPairsToIndexPairs(matchingOffsets)
-	SortIndexPairsByIndex1(matchingIndices)
-	// Convert these to BlockPair(s).
+	matchingOffsets []IndexPair, matchedNormalizedLines bool,
+	maxRareOccurrences uint8) (blockPairs []*BlockPair) {
+	matchingOffsets = append([]IndexPair(nil), matchingOffsets...)
+	SortIndexPairsByIndex1(matchingOffsets)
+	// Convert these to BlockPair(s) with range offsets, rather than file indices;
+	// we'll switch them later when it is cheaper (i.e. fewer conversions typically).
 	var pair *BlockPair
-	for i, m := range matchingIndices {
-		glog.V(1).Infof("matchingIndices[%d] = %v", i, m)
-		aIndex, bIndex := m.Index1, m.Index2
+	for i, m := range matchingOffsets {
+		glog.V(1).Infof("matchingOffsets[%d] = %v", i, m)
+		aOffset, bOffset := m.Index1, m.Index2
 		isExactMatch := true
 		if matchedNormalizedLines {
-			isExactMatch, _, _ = p.CompareFileLines(aIndex, bIndex)
+			isExactMatch, _, _ = p.CompareLines(aOffset, bOffset, maxRareOccurrences)
 		}
 		// Can we just grow the current BlockPair?
 		if pair != nil && pair.IsMatch == isExactMatch &&
-			pair.ABeyond() == aIndex &&
-			pair.BBeyond() == bIndex {
+			pair.ABeyond() == aOffset &&
+			pair.BBeyond() == bOffset {
 			// Yes, so just increase the length.
 			glog.V(1).Info("Growing BlockPair")
 			pair.ALength++
@@ -324,15 +318,18 @@ func (p *FileRangePair) MatchingOffsetsToBlockPairs(
 		}
 		// Create a new pair.
 		pair = &BlockPair{
-			AIndex:            aIndex,
+			AIndex:            aOffset,
 			ALength:           1,
-			BIndex:            bIndex,
+			BIndex:            bOffset,
 			BLength:           1,
 			IsMatch:           isExactMatch,
 			IsNormalizedMatch: !isExactMatch,
 		}
-		glog.V(1).Infof("New BlockPair: %v", pair)
+		glog.V(1).Infof("New BlockPair (range offsets, not indices): %v", pair)
 		blockPairs = append(blockPairs, pair)
+	}
+	for _, pair := range blockPairs {
+		pair.AIndex, pair.BIndex = p.ToFileIndices(pair.AIndex, pair.BIndex)
 	}
 	glog.Infof("MatchingOffsetsToBlockPairs converted %d matching lines to %d BlockPairs",
 		len(matchingOffsets), len(blockPairs))

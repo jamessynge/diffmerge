@@ -55,8 +55,12 @@ type LinePos struct {
 	// Maximum is 255, but that is OK for deciding whether a line is short or not.
 	NormalizedLength uint8
 
+	// Number of leading tabs and then leading spaces of a line.
+	LeadingTabs, LeadingSpaces uint8
+
 	// Is this a well known common line (e.g. "/*" or "#", or an empty line).
 	ProbablyCommon bool // Based solely on normalized content, not other lines.
+
 }
 
 type IndexPair struct {
