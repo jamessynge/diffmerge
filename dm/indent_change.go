@@ -31,33 +31,54 @@ import ()
 // spaces).
 
 type LeadingWhitespaceStatistics struct {
-	NumLeadingTabs map[uint8]int
-	NumLeadingSpaces map[uint8]int
-	NumLeadingSpacesAfterTab map[uint8]int
+	NumLeadingTabs            map[uint8]int
+	NumLeadingSpaces          map[uint8]int
+	NumLeadingSpacesAfterTab  map[uint8]int
+	FracLeadingTabs           map[uint8]float32
+	FracLeadingSpaces         map[uint8]float32
+	FracLeadingSpacesAfterTab map[uint8]float32
 }
 
 func MeasureLeadingWhitespace(files ...*File) (stats LeadingWhitespaceStatistics) {
 	stats.NumLeadingTabs = make(map[uint8]int)
 	stats.NumLeadingSpaces = make(map[uint8]int)
 	stats.NumLeadingSpacesAfterTab = make(map[uint8]int)
-
+	var totalLeadingTabs, totalLeadingSpaces, totalLeadingSpacesAfterTab uint64
 	for _, file := range files {
 		lines := file.Lines
 		for n := range lines {
 			lp := &lines[n]
-			lp.
-
-
+			leadingTabs, leadingSpaces := lp.LeadingTabs, lp.LeadingSpaces
+			totalLeadingTabs += uint64(leadingTabs)
+			totalLeadingSpaces += uint64(leadingSpaces)
+			stats.NumLeadingTabs[leadingTabs]++
+			stats.NumLeadingSpaces[leadingSpaces]++
+			if leadingTabs > 0 {
+				stats.NumLeadingSpacesAfterTab[leadingSpaces]++
+				totalLeadingSpacesAfterTab += uint64(leadingSpaces)
+			}
+		}
+	}
+	stats.FracLeadingTabs = make(map[uint8]float)
+	stats.FracLeadingSpaces = make(map[uint8]float)
+	stats.FracLeadingSpacesAfterTab = make(map[uint8]float)
+	if totalLeadingTabs > 0 {
+		for leadingTabs, count := range stats.NumLeadingTabs {
+			stats.FracLeadingTabs[leadingTabs] = float32(float64(count) / float64(totalLeadingTabs))
+		}
+	}
+	if totalLeadingSpaces > 0 {
+		for leadingSpaces, count := range stats.NumLeadingSpaces {
+			stats.FracLeadingSpaces[leadingTabs] = float32(float64(count) / float64(totalLeadingSpaces))
+		}
+	}
+	if totalLeadingSpacesAfterTab > 0 {
+		for leadingSpaces, count := range stats.NumLeadingSpacesAfterTab {
+			stats.FracLeadingSpacesAfterTab[leadingSpaces] = float32(float64(count) / float64(totalLeadingSpacesAfterTab))
+		}
+	}
 	return
 }
 
-
-
-
-
-
-
-
-
-
 //func GuessTabSpaces(
+// TODO measure how many spaces are in front of lines, figure out the peaks (e.g. 2 much more than 1, or 4 much more than 2).

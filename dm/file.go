@@ -70,6 +70,35 @@ func (p *File) LineCount() int {
 	return len(p.Lines)
 }
 
+func countLeadingWhitespace(lineBytes []byte) (tabCount, spaceCount uint8) {
+	length := len(lineBytes)
+	// There are around 20 space characters in Unicode, but we're only handling
+	// ASCII tab and space characters here.
+	n := 0
+	for ; n < length; n++ {
+		if lineBytes[n] != '\t' {
+			break
+		}
+	}
+	numTabs := n
+	for ; n < length; n++ {
+		if lineBytes[n] != ' ' {
+			break
+		}
+	}
+	numSpaces := n - numTabs
+	// Content starts after leading whitespace, any mixture of spaces and tabs.
+	// If after the leading tabs, then leading spaces there is a tab, then we
+	// declare that the line doesn't start with "well-formed" indentation, so
+	// we can't as readily compare indentations. So, mark this line such that
+	// we can detect this.
+	if n < length && lineBytes[n] == '\t' {
+		numTabs = 255
+		numSpaces = 255
+	}
+	return uint8(MinInt(numTabs, 255)), uint8(MinInt(numSpaces, 255))
+}
+
 func ReadFile(name string) (*File, error) {
 	body, err := ioutil.ReadFile(name)
 	if err != nil {
@@ -90,6 +119,7 @@ func ReadFile(name string) (*File, error) {
 		if line != nil {
 			index := len(p.Lines)
 			length := len(line)
+			tabCount, spaceCount := countLeadingWhitespace
 			unindentedLine := removeIndent(line)
 			hash, normalizedHash := hasher.Compute2(line, unindentedLine)
 			normalizedLine := normalizeLine(unindentedLine)
@@ -103,6 +133,8 @@ func ReadFile(name string) (*File, error) {
 				NormalizedHash:   normalizedHash,
 				NormalizedLength: uint8(MinInt(normalizedLength, 255)),
 				ProbablyCommon:   probablyCommon,
+				LeadingTabs:      tabCount,
+				LeadingSpaces:    spaceCount,
 			})
 			pos += length
 		}
