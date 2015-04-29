@@ -866,7 +866,7 @@ func (p *diffState) linearMatch(
 		}
 	}
 
-	abIndices := WeightedLCS(len(aLines), len(bLines), getSimilarity)
+	abIndices, _ := WeightedLCS(len(aLines), len(bLines), getSimilarity)
 	var result []BlockMatch
 	for _, ab := range abIndices {
 		result = append(result, BlockMatch{

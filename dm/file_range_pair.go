@@ -268,13 +268,13 @@ func (s *SimilarityFactors) SimilarityOfLines(pair *FileRangePair, aOffset, bOff
 	return 0
 }
 
-func (p *FileRangePair) ComputeWeightedLCS(s *SimilarityFactors) (lcsOffsetPairs []IndexPair) {
+func (p *FileRangePair) ComputeWeightedLCS(s *SimilarityFactors) (lcsOffsetPairs []IndexPair, score float32) {
 	computeSimilarity := func(aOffset, bOffset int) float32 {
 		return s.SimilarityOfLines(p, aOffset, bOffset)
 	}
 	if p.aLength > 0 && p.bLength > 0 {
 		glog.Infof("ComputeWeightedLCS: %s", p.BriefDebugString())
-		lcsOffsetPairs = WeightedLCS(p.aLength, p.bLength, computeSimilarity)
+		lcsOffsetPairs, score = WeightedLCS(p.aLength, p.bLength, computeSimilarity)
 		glog.Infof("ComputeWeightedLCS: LCS length == %d", len(lcsOffsetPairs))
 	}
 	return

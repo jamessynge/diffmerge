@@ -17,7 +17,7 @@ import (
 // have any other objective function.
 // TODO Lots of opportunity here for (well known) optimizations.
 func WeightedLCS(aLength, bLength int, getSimilarity func(aIndex, bIndex int) float32) (
-	result []IndexPair) {
+	result []IndexPair, score float32) {
 
 	// Convention: the first index of the table (related to positions in A) is
 	// called the up-down index (up is towards 0), and the second index is called
@@ -33,10 +33,9 @@ func WeightedLCS(aLength, bLength int, getSimilarity func(aIndex, bIndex int) fl
 			similarity := getSimilarity(aIndex, bIndex)
 
 			// Compute the value to be placed in table[aIndex+1][bIndex+1], which
-			// is the weighted length of the LCS if it the strings A and B were of
+			// is the weighted length of the LCS if the strings A and B were of
 			// length aIndex+1 and bIndex+1.  Because the similarity is not just
-			// zero or one, we need to figure compute the maximum of 3 possible
-			// values.
+			// zero or one, we need to compute the maximum of 3 possible values.
 			maxNonSimilar := MaxFloat32(table[aIndex][bIndex+1], table[aIndex+1][bIndex])
 
 			if similarity > 0 {
@@ -75,5 +74,5 @@ func WeightedLCS(aLength, bLength int, getSimilarity func(aIndex, bIndex int) fl
 		j--
 	}
 
-	return result
+	return result, table[aLength][bLength]
 }
