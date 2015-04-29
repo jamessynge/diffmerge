@@ -34,6 +34,7 @@ import ()
 
 type LinePos struct {
 	Start, Length, Index int
+
 	// Hash of the full line (including newline and/or carriage return at end).
 	Hash uint32
 	// Hash for a "normalized" version of the line, with the thought
@@ -55,12 +56,16 @@ type LinePos struct {
 	// Maximum is 255, but that is OK for deciding whether a line is short or not.
 	NormalizedLength uint8
 
-	// Number of leading tabs and then leading spaces of a line.
+	// Number of leading tabs and then leading spaces of a line. Capped at 255,
+	// and set to 255 if the leading whitespace is not well-formed.
 	LeadingTabs, LeadingSpaces uint8
 
 	// Is this a well known common line (e.g. "/*" or "#", or an empty line).
 	ProbablyCommon bool // Based solely on normalized content, not other lines.
+}
 
+func (p *LinePos) ValidLeadingWhiteSpace() bool {
+	return p.LeadingTabs < 255 && p.LeadingSpaces < 255
 }
 
 type IndexPair struct {

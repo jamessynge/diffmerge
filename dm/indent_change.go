@@ -48,6 +48,9 @@ func MeasureLeadingWhitespace(files ...*File) (stats LeadingWhitespaceStatistics
 		lines := file.Lines
 		for n := range lines {
 			lp := &lines[n]
+			if !lp.ValidLeadingWhiteSpace() {
+				continue
+			}
 			leadingTabs, leadingSpaces := lp.LeadingTabs, lp.LeadingSpaces
 			totalLeadingTabs += uint64(leadingTabs)
 			totalLeadingSpaces += uint64(leadingSpaces)
@@ -59,9 +62,9 @@ func MeasureLeadingWhitespace(files ...*File) (stats LeadingWhitespaceStatistics
 			}
 		}
 	}
-	stats.FracLeadingTabs = make(map[uint8]float)
-	stats.FracLeadingSpaces = make(map[uint8]float)
-	stats.FracLeadingSpacesAfterTab = make(map[uint8]float)
+	stats.FracLeadingTabs = make(map[uint8]float32)
+	stats.FracLeadingSpaces = make(map[uint8]float32)
+	stats.FracLeadingSpacesAfterTab = make(map[uint8]float32)
 	if totalLeadingTabs > 0 {
 		for leadingTabs, count := range stats.NumLeadingTabs {
 			stats.FracLeadingTabs[leadingTabs] = float32(float64(count) / float64(totalLeadingTabs))
@@ -69,7 +72,7 @@ func MeasureLeadingWhitespace(files ...*File) (stats LeadingWhitespaceStatistics
 	}
 	if totalLeadingSpaces > 0 {
 		for leadingSpaces, count := range stats.NumLeadingSpaces {
-			stats.FracLeadingSpaces[leadingTabs] = float32(float64(count) / float64(totalLeadingSpaces))
+			stats.FracLeadingSpaces[leadingSpaces] = float32(float64(count) / float64(totalLeadingSpaces))
 		}
 	}
 	if totalLeadingSpacesAfterTab > 0 {

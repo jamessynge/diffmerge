@@ -119,7 +119,7 @@ func ReadFile(name string) (*File, error) {
 		if line != nil {
 			index := len(p.Lines)
 			length := len(line)
-			tabCount, spaceCount := countLeadingWhitespace
+			tabCount, spaceCount := countLeadingWhitespace(line)
 			unindentedLine := removeIndent(line)
 			hash, normalizedHash := hasher.Compute2(line, unindentedLine)
 			normalizedLine := normalizeLine(unindentedLine)
