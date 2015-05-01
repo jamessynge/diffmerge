@@ -12,25 +12,39 @@ var TO_BE_DELETED = glog.CopyStandardLogTo
 // Aim here is to be able to represent two files, or two ranges, one in each
 // of two files, as a single object.
 
+type SharedEndsKey struct {
+	OnlyExactMatches bool
+	MaxRareOccurrences uint8
+}
+
+type SharedEndsData struct {
+	SharedEndsKey
+	NonRarePrefixLength, NonRareSuffixLength int
+	RarePrefixLength, RareSuffixLength     int
+	RangesAreEqual, RangesAreApproximatelyEqual bool
+}
+
 type FileRangePair struct {
 	// Full files
 	aFile, bFile *File
 
 	aRange, bRange                              FileRange
 	aLength, bLength                            int
-	rangesAreEqual, rangesAreApproximatelyEqual bool
 
-	// Lengths of the common (shared) prefix and suffix of the pair of ranges.
+	// Lengths of the shared prefix and shared suffix of the pair of ranges.
 	// A prefix (or suffix) may end with a non-rare line (e.g a blank line),
 	// and thus we may want to back off to a prefix (suffix) whose last (first)
 	// line is rare.
 	// Note that common prefix and common suffix can overlap, as when comparing
 	// these two strings for common prefix and suffix: "ababababababa" and
-	// "ababa".  Which of these you want depends upon context, which is not
-	// known here.
-	commonPrefixLength, commonSuffixLength int
-	rarePrefixLength, rareSuffixLength     int
-	haveMeasuredCommonEnds                 bool
+	// "ababa".  Which of these you want depends upon context, and that context
+	// is not known here.
+	sharedEndsMap map[SharedEndsKey]SharedEndsData
+	basicSharedEndsData SharedEndsData
+}
+
+func MakeFullFileRangePair(aFile, bFile *File) *FileRangePair {
+	return MakeFileRangePair(aFile, bFile, aFile.GetFullRange(), bFile.GetFullRange())
 }
 
 func MakeFileRangePair(aFile, bFile *File, aRange, bRange FileRange) *FileRangePair {
@@ -46,11 +60,7 @@ func MakeFileRangePair(aFile, bFile *File, aRange, bRange FileRange) *FileRangeP
 	if !FileRangeIsEmpty(bRange) {
 		p.bLength = bRange.LineCount()
 	}
-	if p.aLength == 0 && p.bLength == 0 {
-		p.rangesAreEqual = true
-		p.rangesAreApproximatelyEqual = true
-		p.haveMeasuredCommonEnds = true
-	}
+	p.basicSharedEndsData = p.MeasureSharedEnds(false, 1)
 	return p
 }
 
@@ -87,15 +97,16 @@ func (p *FileRangePair) BothAreEmpty() bool {
 	return p.aLength == 0 && p.bLength == 0
 }
 
-// Only valid p.haveMeasuredCommonEnds is true.
+// Valid if ranges empty, or if have called MeasureSharedEnds.
 func (p *FileRangePair) RangesAreSame(onlyExactMatches bool) bool {
-	return p.rangesAreEqual || (!onlyExactMatches && p.rangesAreApproximatelyEqual)
+	return (p.basicSharedEndsData.RangesAreEqual ||
+			(!onlyExactMatches && p.basicSharedEndsData.RangesAreApproximatelyEqual))
 }
 
-// Only valid p.haveMeasuredCommonEnds is true.
+// Valid if ranges empty, or if have called MeasureSharedEnds.
 func (p *FileRangePair) RangesAreDifferent(approxIsDifferent bool) bool {
-	return (p.aLength != p.bLength || (approxIsDifferent && !p.rangesAreEqual) ||
-		!p.rangesAreApproximatelyEqual)
+	return (p.aLength != p.bLength || (approxIsDifferent && !p.basicSharedEndsData.RangesAreEqual) ||
+		!p.basicSharedEndsData.RangesAreApproximatelyEqual)
 }
 
 func (p *FileRangePair) ToFileIndices(aOffset, bOffset int) (aIndex, bIndex int) {
@@ -138,22 +149,30 @@ func (p *FileRangePair) CompareLines(aOffset, bOffset int, maxRareOccurrences ui
 	return
 }
 
-// Note that common prefix may overlap, as when comparing these two strings
+// Note that shared ends may overlap, as when comparing these two strings
 // for common prefix and suffix: "ababababababa" and "ababa".
 // Returns true if fully consumed.
-func (p *FileRangePair) MeasureCommonEnds(onlyExactMatches bool, maxRareOccurrences uint8) (rangesSame bool) {
-	if p.haveMeasuredCommonEnds {
-		return p.rangesAreEqual || (!onlyExactMatches && p.rangesAreApproximatelyEqual)
+func (p *FileRangePair) MeasureSharedEnds(onlyExactMatches bool, maxRareOccurrences uint8) SharedEndsData {
+	key := SharedEndsKey{onlyExactMatches, maxRareOccurrences}
+	if data, ok := p.sharedEndsMap[key]; ok { return data }
+	data := SharedEndsData{
+		SharedEndsKey: key,
 	}
-	p.haveMeasuredCommonEnds = true
+	if p.sharedEndsMap == nil {
+		p.sharedEndsMap = make(map[SharedEndsKey]SharedEndsData)
+	}
 	if !p.BothAreNotEmpty() {
-		p.rangesAreEqual = p.BothAreEmpty()
-		return p.rangesAreEqual
+		if p.BothAreEmpty() {
+			data.RangesAreEqual = true
+		}
+		p.sharedEndsMap[key] = data
+		return data
 	}
-	limit := MinInt(p.aLength, p.bLength)
+	loLength := MinInt(p.aLength, p.bLength)
+	hiLength := MaxInt(p.aLength, p.bLength)
 	allExact := true
 	rareLength, nonRareLength := 0, 0
-	for n := 0; n < limit; {
+	for n := 0; n < loLength; {
 		equal, approx, rare := p.CompareLines(n, n, maxRareOccurrences)
 		if !(equal || (approx && !onlyExactMatches)) {
 			break
@@ -165,18 +184,18 @@ func (p *FileRangePair) MeasureCommonEnds(onlyExactMatches bool, maxRareOccurren
 		}
 		allExact = allExact && equal
 	}
-	p.rarePrefixLength = rareLength
-	p.commonPrefixLength = nonRareLength
-
-	if p.commonPrefixLength == p.aLength && p.commonPrefixLength == p.bLength {
-		// In this situation, we skip spending time measuring the suffix length.
-		p.rangesAreEqual = allExact
-		p.rangesAreApproximatelyEqual = true
-		return true
+	data.RarePrefixLength = rareLength
+	data.NonRarePrefixLength = nonRareLength
+	if data.NonRarePrefixLength == hiLength {
+		// All lines are equal, at least after normalization. In this
+		// situation, we skip spending time measuring the suffix length.
+		data.RangesAreEqual = allExact
+		data.RangesAreApproximatelyEqual = true
+		p.sharedEndsMap[key] = data
+		return data
 	}
-
 	rareLength, nonRareLength = 0, 0
-	for n := 1; n <= limit; n++ {
+	for n := 1; n <= loLength; n++ {
 		aOffset, bOffset := p.aLength-n, p.bLength-n
 		equal, approx, rare := p.CompareLines(aOffset, bOffset, maxRareOccurrences)
 		if !(equal || (approx && !onlyExactMatches)) {
@@ -187,34 +206,34 @@ func (p *FileRangePair) MeasureCommonEnds(onlyExactMatches bool, maxRareOccurren
 			rareLength = n
 		}
 	}
-	p.rareSuffixLength = rareLength
-	p.commonSuffixLength = nonRareLength
-	return
+	data.RareSuffixLength = rareLength
+	data.NonRareSuffixLength = nonRareLength
+	p.sharedEndsMap[key] = data
+	return data
 }
 
 func (p *FileRangePair) HasRarePrefixOrSuffix() bool {
-	return p.rarePrefixLength > 0 || p.rarePrefixLength > 0
+	return (p.basicSharedEndsData.RarePrefixLength > 0 ||
+			p.basicSharedEndsData.RareSuffixLength > 0)
 }
 
 func (p *FileRangePair) HasPrefixOrSuffix() bool {
-	return p.commonPrefixLength > 0 || p.commonPrefixLength > 0
+	return (p.basicSharedEndsData.NonRarePrefixLength > 0 ||
+			p.basicSharedEndsData.NonRareSuffixLength > 0)
 }
 
 func (p *FileRangePair) PrefixAndSuffixOverlap(rareEndsOnly bool) bool {
 	limit, combinedLength := MinInt(p.aLength, p.bLength), 0
 	if rareEndsOnly {
-		combinedLength = p.rarePrefixLength + p.rareSuffixLength
+		combinedLength = p.basicSharedEndsData.RarePrefixLength + p.basicSharedEndsData.RareSuffixLength
 	} else {
-		combinedLength = p.commonPrefixLength + p.commonSuffixLength
+		combinedLength = p.basicSharedEndsData.NonRarePrefixLength + p.basicSharedEndsData.NonRareSuffixLength
 	}
 	return limit < combinedLength
 }
 
 // Returns p if there is no common prefix or suffix.
 func (p *FileRangePair) MakeMiddleRangePair(rareEndsOnly bool) *FileRangePair {
-	if !p.haveMeasuredCommonEnds {
-		glog.Fatalf("Middle range has not be measured for %s", p.BriefDebugString())
-	}
 	if p.PrefixAndSuffixOverlap(rareEndsOnly) {
 		// Caller needs to guide the process more directly.
 		cfg := spew.Config
@@ -226,11 +245,11 @@ func (p *FileRangePair) MakeMiddleRangePair(rareEndsOnly bool) *FileRangePair {
 	var lo, suffixLength int
 
 	if rareEndsOnly {
-		lo = p.rarePrefixLength
-		suffixLength = p.rareSuffixLength
+		lo = p.basicSharedEndsData.RarePrefixLength
+		suffixLength = p.basicSharedEndsData.RareSuffixLength
 	} else {
-		lo = p.commonPrefixLength
-		suffixLength = p.commonSuffixLength
+		lo = p.basicSharedEndsData.NonRarePrefixLength
+		suffixLength = p.basicSharedEndsData.NonRareSuffixLength
 	}
 	if lo == 0 && suffixLength == 0 {
 		return p

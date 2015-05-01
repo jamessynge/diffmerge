@@ -25,8 +25,8 @@ func MakeSimpleDiffer(baseRangePair *FileRangePair) *simpleDiffer {
 // Note that common prefix may overlap, as when comparing these two strings
 // for common prefix and suffix: "ababababababa" and "ababa".
 // Returns true if fully consumed.
-func (p *simpleDiffer) MeasureCommonEnds(onlyExactMatches bool, maxRareOccurrences uint8) (rangesSame bool) {
-	return p.baseRangePair.MeasureCommonEnds(onlyExactMatches, maxRareOccurrences)
+func (p *simpleDiffer) MeasureCommonEnds(onlyExactMatches bool, maxRareOccurrences uint8) SharedEndsData {
+	return p.baseRangePair.MeasureSharedEnds(onlyExactMatches, maxRareOccurrences)
 }
 
 func (p *simpleDiffer) HasCommonEnds(rareEndsOnly bool) bool {

@@ -9,6 +9,8 @@ import (
 // suffix lines of the files.
 
 type FileRange interface {
+	File() *File
+
 	// Is the FileRange empty (GetLineCount() == 0)?
 	IsEmpty() bool
 
@@ -42,7 +44,6 @@ type FileRange interface {
 
 	ToFileIndex(offsetInRange int) (indexInFile int)
 	ToRangeOffset(indexInFile int) (offsetInRange int)
-	File() *File
 }
 
 func FileRangeIsEmpty(p FileRange) bool {
