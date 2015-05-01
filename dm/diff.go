@@ -87,7 +87,7 @@ func PerformDiff(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPa
 			//    B lines, rather than just edits, and then attempt to match just that
 			//    portion with A.
 
-			if p.config.matchEnds {
+			if p.config.MatchEnds {
 				p.exp_phase1_ends()
 			}
 
@@ -125,7 +125,7 @@ func PerformDiff(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPa
 			//    B lines, rather than just edits, and then attempt to match just that
 			//    portion with A.
 
-			if p.config.matchEnds {
+			if p.config.MatchEnds {
 				p.exp_phase1_ends()
 			}
 
@@ -137,10 +137,10 @@ func PerformDiff(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPa
 
 			//			p.matchRangeEndsAndMaybeBackoff(false)
 		} else {
-			if p.config.alignRareLines {
+			if p.config.AlignRareLines {
 				p.processOneRangePair()
 				glog.Info("PerformDiff processed rare lines, diffState:\n", p.SDumpToDepth(1))
-				p.config.alignRareLines = false
+				p.config.AlignRareLines = false
 			}
 			p.processAllGapsInB(true, func() { p.processOneRangePair() })
 			glog.Info("PerformDiff processed gaps in B, diffState:\n", p.SDumpToDepth(1))
@@ -246,17 +246,17 @@ func (p *diffState) exp_phase2_and_3_lcs() {
 		p.config = cfg // Restore when done.
 	}()
 
-	p.config.detectBlockMoves = false
-	p.config.matchEnds = true
-	p.config.matchNormalizedEnds = p.config.alignNormalizedLines
+	p.config.DetectBlockMoves = false
+	p.config.MatchEnds = true
+	p.config.MatchNormalizedEnds = p.config.AlignNormalizedLines
 
 	p.matchRangeMiddle()
 
 	glog.Info("exp_phase2_and_3_lcs matched middle, producing the following")
 	glogSideBySide(p.aFile, p.bFile, p.pairs, false, nil)
 
-	if p.config.alignRareLines {
-		p.config.alignRareLines = false
+	if p.config.AlignRareLines {
+		p.config.AlignRareLines = false
 		p.processAllGapsInB(true, func() { p.matchRangeEndsAndMaybeBackoff(true) })
 
 		glog.Info("exp_phase2_and_3_lcs called matchRangeEndsAndMaybeBackoff, producing:")
@@ -272,8 +272,8 @@ func (p *diffState) exp_phase5_moves_and_copies() {
 	defer func() {
 		p.config = cfg
 	}()
-	p.config.detectBlockMoves = false
-	p.config.matchEnds = false
+	p.config.DetectBlockMoves = false
+	p.config.MatchEnds = false
 
 	var newPairs []*BlockPair
 
@@ -446,10 +446,10 @@ func (p *diffState) exp_phase4_moves() (multipleCandidatesFound bool) {
 		p.aRange = oldARange
 		p.bRange = oldBRange
 	}()
-	p.config.detectBlockMoves = false
-	p.config.matchEnds = false
-	p.config.alignNormalizedLines = true
-	p.config.alignRareLines = true
+	p.config.DetectBlockMoves = false
+	p.config.MatchEnds = false
+	p.config.AlignNormalizedLines = true
+	p.config.AlignRareLines = true
 
 	aGapRanges := p.gapsInAToARanges()
 	glog.Infof("Found %d gaps in A", len(aGapRanges))
@@ -467,11 +467,11 @@ func (p *diffState) exp_phase4_moves() (multipleCandidatesFound bool) {
 	range2RareCount := make(map[FileRange]int)
 	for _, aRange := range aGapRanges {
 		range2RareCount[aRange] = computeNumRareLinesInRange(
-			aRange, p.config.omitProbablyCommonLines, p.config.maxRareLineOccurrencesInFile)
+			aRange, p.config.OmitProbablyCommonLines, p.config.MaxRareLineOccurrencesInFile)
 	}
 	for _, bRange := range bGapRanges {
 		range2RareCount[bRange] = computeNumRareLinesInRange(
-			bRange, p.config.omitProbablyCommonLines, p.config.maxRareLineOccurrencesInFile)
+			bRange, p.config.OmitProbablyCommonLines, p.config.MaxRareLineOccurrencesInFile)
 	}
 
 	// TODO Maybe sort the ranges by number of rare lines, so we can focus on
@@ -570,8 +570,8 @@ func (p *diffState) exp_phase4_moves() (multipleCandidatesFound bool) {
 	glog.Info("exp_phase4_moves produced the following")
 	glogSideBySide(p.aFile, p.bFile, p.pairs, false, nil)
 
-	if p.config.alignRareLines {
-		p.config.alignRareLines = false
+	if p.config.AlignRareLines {
+		p.config.AlignRareLines = false
 		p.processAllGapsInA(true, func() { p.matchRangeEndsAndMaybeBackoff(true) })
 
 		glog.Info("exp_phase4_moves called matchRangeEndsAndMaybeBackoff, producing:")
@@ -589,10 +589,10 @@ func (p *diffState) exp_phase5_copies() {
 	defer func() {
 		p.config = cfg
 	}()
-	p.config.detectBlockMoves = false
-	p.config.matchEnds = false
-	p.config.alignNormalizedLines = true
-	p.config.alignRareLines = true
+	p.config.DetectBlockMoves = false
+	p.config.MatchEnds = false
+	p.config.AlignNormalizedLines = true
+	p.config.AlignRareLines = true
 
 	glog.Info("exp_phase5_copies produced the following")
 	glogSideBySide(p.aFile, p.bFile, p.pairs, false, nil)
@@ -600,11 +600,11 @@ func (p *diffState) exp_phase5_copies() {
 
 func (p *diffState) processOneRangePair() {
 	if !FileRangeIsEmpty(p.aRange) && !FileRangeIsEmpty(p.bRange) {
-		if p.config.matchEnds {
+		if p.config.MatchEnds {
 			if p.matchRangeEnds( /*prefix*/ true /*suffix*/, true /*normalize*/, false) {
 				return
 			}
-			if p.config.matchNormalizedEnds &&
+			if p.config.MatchNormalizedEnds &&
 				p.matchRangeEnds( /*prefix*/ true /*suffix*/, true /*normalize*/, true) {
 				return
 			}
@@ -741,7 +741,7 @@ func (p *diffState) matchRangeEndsAndMaybeBackoff(performBackoff bool) bool {
 	if p.someRangeIsEmpty() {
 		return true
 	}
-	if !p.config.matchEnds {
+	if !p.config.MatchEnds {
 		return false
 	}
 
@@ -766,7 +766,7 @@ func (p *diffState) matchRangeEndsAndMaybeBackoff(performBackoff bool) bool {
 		return true
 	}
 
-	if p.config.matchNormalizedEnds &&
+	if p.config.MatchNormalizedEnds &&
 		p.matchRangeEnds(MATCH_PREFIX, MATCH_SUFFIX, NORMALIZED_MATCH) {
 		return true
 	}
@@ -842,7 +842,7 @@ func (p *diffState) linearMatch(
 	var getSimilarity func(aIndex, bIndex int) float32
 	var normalizedSimilarity float32
 	if normalize {
-		normalizedSimilarity = float32(p.config.lcsNormalizedSimilarity)
+		normalizedSimilarity = float32(p.config.LcsNormalizedSimilarity)
 		if !(0 < normalizedSimilarity && normalizedSimilarity <= 1) {
 			glog.Fatalf("--lcs-normalized-similarity=%v is out of range (0,1].",
 				normalizedSimilarity)
@@ -932,12 +932,12 @@ func (p *diffState) rangeToBlockPairs() (newPairs []*BlockPair) {
 	// If we're here, then aRange and bRange contain the remaining lines to be
 	// matched.	Figure out the subset of lines we're going to be matching.
 	var aLines, bLines []LinePos
-	normalize := p.config.alignNormalizedLines
-	if p.config.alignRareLines {
+	normalize := p.config.AlignNormalizedLines
+	if p.config.AlignRareLines {
 		aLines, bLines = FindRareLinesInRanges(
 			p.aRange, p.bRange, normalize,
-			p.config.requireSameRarity, p.config.omitProbablyCommonLines,
-			p.config.maxRareLineOccurrencesInRange, p.config.maxRareLineOccurrencesInFile)
+			p.config.RequireSameRarity, p.config.OmitProbablyCommonLines,
+			p.config.MaxRareLineOccurrencesInRange, p.config.MaxRareLineOccurrencesInFile)
 		glog.V(1).Info("rangeToBlockPairs found ", len(aLines), " rare lines in A, of ",
 			p.aRange.LineCount(), " middle lines")
 		glog.V(1).Info("rangeToBlockPairs found ", len(bLines), " rare lines in B, of ",
@@ -956,7 +956,7 @@ func (p *diffState) rangeToBlockPairs() (newPairs []*BlockPair) {
 	// These return matches in terms of the indices of aLines and bLines, not
 	// the file indices, so they need to be converted afterwards.
 	var matches []BlockMatch
-	if p.config.detectBlockMoves {
+	if p.config.DetectBlockMoves {
 		getHash := SelectHashGetter(normalize)
 		matches = p.matchWithMoves(aLines, bLines, getHash)
 	} else {

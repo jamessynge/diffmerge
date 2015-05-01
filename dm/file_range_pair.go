@@ -13,14 +13,14 @@ var TO_BE_DELETED = glog.CopyStandardLogTo
 // of two files, as a single object.
 
 type SharedEndsKey struct {
-	OnlyExactMatches bool
+	OnlyExactMatches   bool
 	MaxRareOccurrences uint8
 }
 
 type SharedEndsData struct {
 	SharedEndsKey
-	NonRarePrefixLength, NonRareSuffixLength int
-	RarePrefixLength, RareSuffixLength     int
+	NonRarePrefixLength, NonRareSuffixLength    int
+	RarePrefixLength, RareSuffixLength          int
 	RangesAreEqual, RangesAreApproximatelyEqual bool
 }
 
@@ -28,8 +28,8 @@ type FileRangePair struct {
 	// Full files
 	aFile, bFile *File
 
-	aRange, bRange                              FileRange
-	aLength, bLength                            int
+	aRange, bRange   FileRange
+	aLength, bLength int
 
 	// Lengths of the shared prefix and shared suffix of the pair of ranges.
 	// A prefix (or suffix) may end with a non-rare line (e.g a blank line),
@@ -39,7 +39,7 @@ type FileRangePair struct {
 	// these two strings for common prefix and suffix: "ababababababa" and
 	// "ababa".  Which of these you want depends upon context, and that context
 	// is not known here.
-	sharedEndsMap map[SharedEndsKey]SharedEndsData
+	sharedEndsMap       map[SharedEndsKey]SharedEndsData
 	basicSharedEndsData SharedEndsData
 }
 
@@ -100,7 +100,7 @@ func (p *FileRangePair) BothAreEmpty() bool {
 // Valid if ranges empty, or if have called MeasureSharedEnds.
 func (p *FileRangePair) RangesAreSame(onlyExactMatches bool) bool {
 	return (p.basicSharedEndsData.RangesAreEqual ||
-			(!onlyExactMatches && p.basicSharedEndsData.RangesAreApproximatelyEqual))
+		(!onlyExactMatches && p.basicSharedEndsData.RangesAreApproximatelyEqual))
 }
 
 // Valid if ranges empty, or if have called MeasureSharedEnds.
@@ -154,7 +154,9 @@ func (p *FileRangePair) CompareLines(aOffset, bOffset int, maxRareOccurrences ui
 // Returns true if fully consumed.
 func (p *FileRangePair) MeasureSharedEnds(onlyExactMatches bool, maxRareOccurrences uint8) SharedEndsData {
 	key := SharedEndsKey{onlyExactMatches, maxRareOccurrences}
-	if data, ok := p.sharedEndsMap[key]; ok { return data }
+	if data, ok := p.sharedEndsMap[key]; ok {
+		return data
+	}
 	data := SharedEndsData{
 		SharedEndsKey: key,
 	}
@@ -214,12 +216,12 @@ func (p *FileRangePair) MeasureSharedEnds(onlyExactMatches bool, maxRareOccurren
 
 func (p *FileRangePair) HasRarePrefixOrSuffix() bool {
 	return (p.basicSharedEndsData.RarePrefixLength > 0 ||
-			p.basicSharedEndsData.RareSuffixLength > 0)
+		p.basicSharedEndsData.RareSuffixLength > 0)
 }
 
 func (p *FileRangePair) HasPrefixOrSuffix() bool {
 	return (p.basicSharedEndsData.NonRarePrefixLength > 0 ||
-			p.basicSharedEndsData.NonRareSuffixLength > 0)
+		p.basicSharedEndsData.NonRareSuffixLength > 0)
 }
 
 func (p *FileRangePair) PrefixAndSuffixOverlap(rareEndsOnly bool) bool {
