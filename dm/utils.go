@@ -35,6 +35,14 @@ func MaxInt(i, j int) int {
 	}
 }
 
+func MinFloat32(u, v float32) float32 {
+	if u < v {
+		return u
+	} else {
+		return v
+	}
+}
+
 func MaxFloat32(u, v float32) float32 {
 	if u < v {
 		return v

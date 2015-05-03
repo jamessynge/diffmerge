@@ -17,15 +17,34 @@ type File struct {
 	Body  []byte    // Body of the file
 	Lines []LinePos // Locations and hashes of the file lines.
 
-	fullRange FileRange
+	FullRange FileRange
+	FileRanges map[IndexPair]FileRange
 }
 
 func (p *File) GetFullRange() FileRange {
-	return p.fullRange
+	return p.FullRange
 }
 
 func (p *File) MakeSubRange(start, length int) FileRange {
-	return CreateFileRange(p, start, length)
+	lc := p.LineCount()
+	if !(0 <= start && start+length <= lc && length >= 0) {
+		glog.Fatalf("New range [%d, %d) is invalid (max length %d)",
+			start, start+length, lc)
+	}
+	key := IndexPair{start, length}
+	if p.FileRanges == nil {
+		p.FileRanges = make(map[IndexPair]FileRange)
+	} else if fr, ok := p.FileRanges[key]; ok {
+		return fr
+	}
+	fr := &fileRange{
+		file:   p,
+		start:  start,
+		length: length,
+		beyond: start + length,
+	}
+	p.FileRanges[key] = fr
+	return fr
 }
 
 func (p *File) Select(fn func(lp LinePos) bool) []LinePos {
@@ -160,6 +179,6 @@ func ReadFile(name string) (*File, error) {
 		}
 	}
 
-	p.fullRange = CreateFileRange(p, 0, p.LineCount())
+	p.FullRange = p.MakeSubRange(0, p.LineCount())
 	return p, nil
 }

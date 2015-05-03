@@ -15,6 +15,9 @@ type BlockPair struct {
 	AIndex, ALength   int
 	BIndex, BLength   int
 	MoveId            int // An attempt to tell one move from another.
+	// If IsMatch and IsNormalizedMatch are both true, this means that the
+	// lines match after normalization, and it is possible that some or even
+	// all of them are exact mathes, but we've not recorded that.
 	IsMatch           bool
 	IsNormalizedMatch bool
 	IsMove            bool // Does this represent a move?

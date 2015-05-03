@@ -68,16 +68,7 @@ type fileRange struct {
 }
 
 func CreateFileRange(file *File, start, length int) FileRange {
-	if start < 0 || start+length > file.LineCount() {
-		glog.Fatalf("New range (%d, +%d) is invalid (max length %d)",
-			start, length, file.LineCount())
-	}
-	return &fileRange{
-		file:   file,
-		start:  start,
-		length: length,
-		beyond: start + length,
-	}
+	return file.MakeSubRange(start, length)
 }
 
 func (p *fileRange) LineCount() int {

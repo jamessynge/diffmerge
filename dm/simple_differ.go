@@ -10,6 +10,9 @@ import (
 type simpleDiffer struct {
 	baseRangePair, middleRangePair *FileRangePair
 
+	sharedPrefixPairs []*BlockPair
+	sharedSuffixPairs []*BlockPair
+
 	// Matches (presumably, not expecting to store mismatches in here) found in
 	// the middle range.
 	middlePairs []*BlockPair
@@ -29,21 +32,32 @@ func (p *simpleDiffer) MeasureCommonEnds(onlyExactMatches bool, maxRareOccurrenc
 	return p.baseRangePair.MeasureSharedEnds(onlyExactMatches, maxRareOccurrences)
 }
 
-func (p *simpleDiffer) HasCommonEnds(rareEndsOnly bool) bool {
-	if rareEndsOnly {
-		return p.baseRangePair.HasRarePrefixOrSuffix()
-	} else {
-		return p.baseRangePair.HasPrefixOrSuffix()
-	}
-}
+//func (p *simpleDiffer) HasCommonEnds(rareEndsOnly bool) bool {
+//	if rareEndsOnly {
+//		return p.baseRangePair.HasRarePrefixOrSuffix()
+//	} else {
+//		return p.baseRangePair.HasPrefixOrSuffix()
+//	}
+//}
 
 func (p *simpleDiffer) SetMiddleToBase() (bothNonEmpty bool) {
 	p.middleRangePair = p.baseRangePair
 	return p.MiddleRangesAreNotEmpty()
 }
 
-func (p *simpleDiffer) SetMiddleToGap(rareEndsOnly bool) (bothNonEmpty bool) {
-	p.middleRangePair = p.baseRangePair.MakeMiddleRangePair(rareEndsOnly)
+func (p *simpleDiffer) SetMiddleToGap(
+		rareEndsOnly, onlyExactMatches bool, maxRareOccurrences uint8) {
+	p.middleRangePair = p.baseRangePair.MakeMiddleRangePair(
+		rareEndsOnly, onlyExactMatches, maxRareOccurrences)
+	p.sharedPrefixPairs, p.sharedSuffixPairs = p.baseRangePair.MakeSharedEndBlockPairs(
+		rareEndsOnly, onlyExactMatches, maxRareOccurrences)
+}
+
+func (p *simpleDiffer) BaseRangesAreNotEmpty() bool {
+	return p.baseRangePair.BothAreNotEmpty()
+}
+
+func (p *simpleDiffer) MiddleRangesAreNotEmpty() bool {
 	return p.middleRangePair.BothAreNotEmpty()
 }
 
@@ -55,6 +69,11 @@ func (p *simpleDiffer) ConvertMiddleOffsets(aMiddleOffset, bMiddleOffset int) (a
 	return p.middleRangePair.ToFileIndices(aMiddleOffset, bMiddleOffset)
 }
 
+func (p *simpleDiffer) ComputeWeightedLCSOfMiddle(s SimilarityFactors) (score float32) {
+	p.middlePairs, score = p.middleRangePair.ComputeWeightedLCSBlockPairs(s)
+	return score
+}
+
 //func (p *simpleDiffer) CompareBaseLines(aOffset, bOffset int) (equal, approx, rare bool) {
 //	return p.CompareFileLines(p.ConvertBaseOffsets(aOffset, bOffset))
 //}
@@ -62,14 +81,6 @@ func (p *simpleDiffer) ConvertMiddleOffsets(aMiddleOffset, bMiddleOffset int) (a
 //func (p *simpleDiffer) CompareMiddleLines(aMiddleOffset, bMiddleOffset int) (equal, approx, rare bool) {
 //	return p.CompareFileLines(p.ConvertMiddleOffsets(aMiddleOffset, bMiddleOffset))
 //}
-
-func (p *simpleDiffer) BaseRangesAreNotEmpty() bool {
-	return p.baseRangePair.BothAreNotEmpty()
-}
-
-func (p *simpleDiffer) MiddleRangesAreNotEmpty() bool {
-	return p.middleRangePair.BothAreNotEmpty()
-}
 
 /*
 func (p *simpleDiffer) SetMiddlePairsFromIndexPairs(
