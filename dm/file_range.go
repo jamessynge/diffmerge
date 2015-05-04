@@ -15,7 +15,7 @@ type FileRange interface {
 	IsEmpty() bool
 
 	// Returns the number of lines in the range.
-	LineCount() int
+	Length() int
 
 	// Returns the index of the first line (zero for the whole file).
 	FirstIndex() int
@@ -53,6 +53,13 @@ func FileRangeIsEmpty(p FileRange) bool {
 	return p.IsEmpty()
 }
 
+func FileRangeLength(p FileRange) int {
+	if p == nil {
+		return 0
+	}
+	return p.Length()
+}
+
 type fileRange struct {
 	file *File
 
@@ -71,13 +78,8 @@ func CreateFileRange(file *File, start, length int) FileRange {
 	return file.MakeSubRange(start, length)
 }
 
-func (p *fileRange) LineCount() int {
-	if p == nil {
-		return 0
-	}
-	return p.length
-}
-func (p *fileRange) IsEmpty() bool   { return p == nil || p.LineCount() == 0 }
+func (p *fileRange) Length() int { return p.length }
+func (p *fileRange) IsEmpty() bool { return p == nil || p.Length() == 0 }
 func (p *fileRange) FirstIndex() int { return p.start }
 
 func (p *fileRange) LinePosAtOffset(offsetInRange int) LinePos {

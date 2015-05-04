@@ -135,7 +135,16 @@ func main() {
 	case 2:
 		fromFile := ReadFileOrDie(flag.Arg(0))
 		toFile := ReadFileOrDie(flag.Arg(1))
-		pairs := dm.PerformDiff(fromFile, toFile, *diffConfig)
+		pairs := dm.PerformDiff2(fromFile, toFile, *diffConfig)
+		if len(pairs) == 0 {
+			pairs = append(pairs, &dm.BlockPair{
+				AIndex: 0,
+				ALength: fromFile.LineCount(),
+				BIndex: 0,
+				BLength: toFile.LineCount(),
+				IsMatch: true,
+			})
+		}
 		if len(pairs) == 1 && pairs[0].IsMatch {
 			status = ConflictFree
 		} else {

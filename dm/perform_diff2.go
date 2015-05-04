@@ -6,55 +6,50 @@ import (
 
 func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockPair) {
 	defer glog.Flush()
-	rootRangePair := MakeFullFileRangePair(aFile, bFile)
-	if rootRangePair.RangesAreSame(true /* onlyExactMatches */) {
-		glog.Info("PerformDiff2: files are identical")
-		return nil
-	} else if rootRangePair.RangesAreSame(false /* onlyExactMatches */) {
-		glog.Info("PerformDiff2: files are identical after normalization")
-		// TODO Calculate indentation changes.
-		panic("TODO Calculate indentation changes. Make BlockPairs")
-	} else if !rootRangePair.BothAreNotEmpty() {
-		// One is empty (not both, else the ranges would be the same).
-		if aFile.LineCount() > 0 {
-			pair := &BlockPair{
-				AIndex: 0,
-				ALength: aFile.LineCount(),
-				BIndex: 0,
-				BLength: 0,
-			}
-			pairs = append(pairs, pair)
-		} else {
-			pair := &BlockPair{
-				AIndex: 0,
-				ALength: 0,
-				BIndex: 0,
-				BLength: bFile.LineCount(),
-			}
-			pairs = append(pairs, pair)
+	if aFile.LineCount() == 0 {
+		if bFile.LineCount() == 0 {
+			return nil // They're the same.
 		}
-		return
+		pair := &BlockPair{
+			AIndex: 0,
+			ALength: 0,
+			BIndex: 0,
+			BLength: bFile.LineCount(),
+		}
+		return append(pairs, pair)
+	} else if bFile.LineCount() == 0 {
+		pair := &BlockPair{
+			AIndex: 0,
+			ALength: aFile.LineCount(),
+			BIndex: 0,
+			BLength: 0,
+		}
+		return append(pairs, pair)
 	}
-
-	rootDiffer := MakeSimpleDiffer(rootRangePair)
-	maxRareOccurrences := uint8(MinInt(255, config.MaxRareLineOccurrencesInFile))
+	filePair := MakeFilePair(aFile, bFile)
+	rootRangePair := filePair.FullFileRangePair()
 
 	// Phase 1: Match ends
 
+	var mase *middleAndSharedEnds
+	middleRangePair := rootRangePair
 	if config.MatchEnds {
-		rootDiffer.SetMiddleToGap(config.OmitProbablyCommonLines,
-															config.MatchNormalizedEnds, maxRareOccurrences)
-		if !rootDiffer.MiddleRangesAreNotEmpty() {
-			// One of the middle ranges is empty (not both, because otherwise we'd
-			// have discovered that above).
-			panic("TODO Create BlockPair for middle, for shared ends, sort and return")
+		mase = FindMiddleAndSharedEnds(rootRangePair, config)
+		if mase != nil {
+			if mase.sharedEndsData.RangesAreEqual {
+				return
+			} else if mase.sharedEndsData.RangesAreApproximatelyEqual {
+				glog.Info("PerformDiff2: files are identical after normalization")
+				// TODO Calculate indentation changes.
+				panic("TODO Calculate indentation changes. Make BlockPairs")
+			}
+			middleRangePair = mase.middleRangePair
 		}
-	} else {
-		rootDiffer.SetMiddleToBase()
 	}
 
 	// Phase 2: LCS alignment.
 
+	maxRareOccurrences := uint8(MaxInt(1, MinInt(255, config.MaxRareLineOccurrencesInFile)))
 	normSim := MaxFloat32(0, MinFloat32(1, float32(config.LcsNormalizedSimilarity)))
 	halfDelta := (1 - normSim) / 2
 	sf := SimilarityFactors{
@@ -73,17 +68,32 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 		sf.ExactNonRare = 0
 	}
 
-	rootDiffer.ComputeWeightedLCSOfMiddle(s)
+	lcsData := PerformLCS(middleRangePair, config, sf)
 
-	// Phase 3: If have done rare and/or exact match alignment only, then we may
-	// have gaps that consist solely of normalized and/or non-rare matches, and
-	// don't need to consider them later. 
-
-
+	if true {
+		if mase != nil  {
+			pairs = append(pairs, mase.sharedPrefixPairs...)
+		}
+		if lcsData != nil {
+			pairs = append(pairs, lcsData.lcsPairs...)
+		}
+		if mase != nil  {
+			pairs = append(pairs, mase.sharedSuffixPairs...)
+		}
+		SortBlockPairsByAIndex(pairs)
+		return
 	}
 
 
-	rootDiffer.BaseRangesAreNotEmpty()
+
+
+	// TODO Phase 4: move detection
+
+	// TODO Phase 5: copy detection
+
+
+
+//	rootDiffer.BaseRangesAreNotEmpty()
 
 	//
 	//
@@ -94,6 +104,10 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 	//	return p.baseRangePair.MeasureCommonEnds(onlyExactMatches, maxRareOccurrences)
 	//}
 	//
+
+
+
+
 
 	return nil
 }

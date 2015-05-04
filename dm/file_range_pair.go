@@ -12,67 +12,34 @@ var TO_BE_DELETED = glog.CopyStandardLogTo
 // Aim here is to be able to represent two files, or two ranges, one in each
 // of two files, as a single object.
 
-type SharedEndsKey struct {
-	OnlyExactMatches   bool
-	MaxRareOccurrences uint8
+type FileRangePair interface {
+	// The files.
+	BaseFilePair() FilePair
+
+	ARange() FileRange
+	BRange() FileRange
+
+	ALength() int
+	BLength() int
+
+	ToFileIndices(aOffset, bOffset int) (aIndex, bIndex int)
+	ToRangeOffsets(aIndex, bIndex int) (aOffset, bOffset int)
+	MakeSubRangePair(aIndex, aLength, bIndex, bLength int) FileRangePair
+
+	BriefDebugString() string
+
+	MeasureSharedEnds(onlyExactMatches bool, maxRareOccurrences uint8) SharedEndsData
+	CompareLines(aOffset, bOffset int, maxRareOccurrences uint8) (equal, approx, rare bool)
+	MakeSharedEndBlockPairs(rareEndsOnly, onlyExactMatches bool, maxRareOccurrences uint8) (prefixPairs, suffixPairs []*BlockPair)
+	MakeMiddleRangePair(rareEndsOnly, onlyExactMatches bool, maxRareOccurrences uint8) FileRangePair
 }
 
-type SharedEndsData struct {
-	SharedEndsKey
-	// If the lines in the range are equal, or equal after normalization
-	// (approximately equal), then one or both of these booleans are true,
-	// and the prefix and suffix lengths are 0.
-	RangesAreEqual, RangesAreApproximatelyEqual bool
-	
-	// The FileRangePair which was measured to produce this.
-	Source *FileRangePair
-
-	NonRarePrefixLength, NonRareSuffixLength    int
-	RarePrefixLength, RareSuffixLength          int
-}
-
-func (p *SharedEndsData) PrefixAndSuffixOverlap(rareEndsOnly bool) {
-	limit, combinedLength := MinInt(p.Source.ALength, p.Source.BLength), 0
-	if rareEndsOnly {
-		combinedLength = p.RarePrefixLength + p.RareSuffixLength
-	} else {
-		combinedLength = p.NonRarePrefixLength + p.NonRareSuffixLength
-	}
-	return limit < combinedLength
-}
-
-func (p *SharedEndsData) HasRarePrefixOrSuffix() bool {
-	return p.RarePrefixLength > 0 || p.RareSuffixLength > 0
-}
-
-func (p *SharedEndsData) HasPrefixOrSuffix() bool {
-	return p.NonRarePrefixLength > 0 || p.NonRareSuffixLength > 0
-}
-
-func (p *SharedEndsData) GetPrefixAndSuffixLengths(rareEndsOnly bool) {
-	if p.PrefixAndSuffixOverlap(rareEndsOnly) {
-		// Caller needs to guide the process more directly.
-		cfg := spew.Config
-		cfg.MaxDepth = 2
-		glog.Fatal("GetPrefixAndSuffixLengths: prefix and suffix overlap;\n",
-							 cfg.Sdump(p))
-	}
-	if rareEndsOnly {
-		return p.RarePrefixLength, p.RareSuffixLength
-	} else {
-		return p.NonRarePrefixLength, p.NonRareSuffixLength
-	}
-	return
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-type FileRangePair struct {
+type frpImpl struct {
 	// Full files
-	AFile, BFile *File
+	filePair FilePair
 
-	ARange, BRange   FileRange
-	ALength, BLength int
+	aRange, bRange   FileRange
+	aLength, bLength int
 
 	// Lengths of the shared prefix and shared suffix of the pair of ranges.
 	// A prefix (or suffix) may end with a non-rare line (e.g a blank line),
@@ -82,139 +49,127 @@ type FileRangePair struct {
 	// these two strings for shared prefix and suffix: "ababababababa" and
 	// "ababa".  Which of these you want depends upon context, and that context
 	// is not known here.
-	SharedEndsMap       map[SharedEndsKey]*SharedEndsData
+	sharedEndsMap       map[SharedEndsKey]*SharedEndsData
 }
 
-func MakeFullFileRangePair(aFile, bFile *File) *FileRangePair {
-	return MakeFileRangePair(aFile, bFile, aFile.GetFullRange(), bFile.GetFullRange())
+func (p *frpImpl) BaseFilePair() FilePair { return p.filePair }
+
+func (p *frpImpl) ARange() FileRange { return p.aRange }
+
+func (p *frpImpl) BRange() FileRange { return p.bRange }
+
+func (p *frpImpl) ALength() int { return p.aLength }
+
+func (p *frpImpl) BLength() int { return p.bLength }
+
+func (p *frpImpl) MakeSubRangePair(aOffset, aLength, bOffset, bLength int) FileRangePair {
+	glog.V(1).Infof("frpImpl.MakeSubRangePair AOffsets: [%d, +%d),  BOffsets: [%d, +%d)",
+		 aOffset, aLength, bOffset, bLength)
+	aLo := p.aRange.ToFileIndex(aOffset)
+	aHi := p.aRange.ToFileIndex(aOffset + aLength)
+	bLo := p.bRange.ToFileIndex(bOffset)
+	bHi := p.bRange.ToFileIndex(bOffset + bLength)
+	return p.filePair.MakeSubRangePair(aLo, aHi-aLo, bLo, bHi-bLo)
 }
 
-func MakeFileRangePair(aFile, bFile *File, aRange, bRange FileRange) *FileRangePair {
-	p := &FileRangePair{
-		AFile:  aFile,
-		BFile:  bFile,
-		ARange: aRange,
-		BRange: bRange,
-	}
-	if !FileRangeIsEmpty(aRange) {
-		p.ALength = aRange.LineCount()
-	}
-	if !FileRangeIsEmpty(bRange) {
-		p.BLength = bRange.LineCount()
-	}
-	return p
-}
-
-func (p *FileRangePair) MakeSubRangePair(aOffset, aLength, bOffset, bLength int) *FileRangePair {
-	aLo := p.ARange.ToFileIndex(aOffset)
-	aHi := p.ARange.ToFileIndex(aOffset + aLength)
-	bLo := p.BRange.ToFileIndex(bOffset)
-	bHi := p.BRange.ToFileIndex(bOffset + bLength)
-	aRange := p.AFile.MakeSubRange(aLo, aHi-aLo)
-	bRange := p.BFile.MakeSubRange(bLo, bHi-bLo)
-	pair := MakeFileRangePair(p.AFile, p.BFile, aRange, bRange)
-	return pair
-}
-
-func (p *FileRangePair) BriefDebugString() string {
+func (p *frpImpl) BriefDebugString() string {
 	var aStart, aBeyond, bStart, bBeyond int
 	if p.ARange != nil {
-		aStart = p.ARange.FirstIndex()
-		aBeyond = p.ARange.LineCount() + aStart
+		aStart = p.aRange.FirstIndex()
+		aBeyond = p.aRange.Length() + aStart
 	}
 	if p.BRange != nil {
-		bStart = p.BRange.FirstIndex()
-		bBeyond = p.BRange.LineCount() + bStart
+		bStart = p.bRange.FirstIndex()
+		bBeyond = p.bRange.Length() + bStart
 	}
-	return fmt.Sprintf("FileRangePair{BRange:[%d, %d), BRange:[%d, %d)}",
+	return fmt.Sprintf("FileRangePair{ARange:[%d, %d), BRange:[%d, %d)}",
 		aStart, aBeyond, bStart, bBeyond)
 }
 
-func (p *FileRangePair) BothAreNotEmpty() bool {
-	return p.ALength > 0 && p.BLength > 0
+func (p *frpImpl) BothAreNotEmpty() bool {
+	return p.aLength > 0 && p.bLength > 0
 }
 
-func (p *FileRangePair) BothAreEmpty() bool {
-	return p.ALength == 0 && p.BLength == 0
+func (p *frpImpl) BothAreEmpty() bool {
+	return p.aLength == 0 && p.bLength == 0
 }
 
 /*
 // Valid if ranges empty, or if have called MeasureSharedEnds.
-func (p *FileRangePair) RangesAreSame(onlyExactMatches bool) bool {
+func (p *frpImpl) RangesAreSame(onlyExactMatches bool) bool {
 	return (p.BasicSharedEndsData.RangesAreEqual ||
 		(!onlyExactMatches && p.BasicSharedEndsData.RangesAreApproximatelyEqual))
 }
 
 // Valid if ranges empty, or if have called MeasureSharedEnds.
-func (p *FileRangePair) RangesAreDifferent(approxIsDifferent bool) bool {
-	return (p.ALength != p.BLength || (approxIsDifferent && !p.BasicSharedEndsData.RangesAreEqual) ||
+func (p *frpImpl) RangesAreDifferent(approxIsDifferent bool) bool {
+	return (p.aLength != p.bLength || (approxIsDifferent && !p.BasicSharedEndsData.RangesAreEqual) ||
 		!p.BasicSharedEndsData.RangesAreApproximatelyEqual)
 }
 */
 
-func (p *FileRangePair) ToFileIndices(aOffset, bOffset int) (aIndex, bIndex int) {
-	aIndex = p.ARange.ToFileIndex(aOffset)
-	bIndex = p.BRange.ToFileIndex(bOffset)
+func (p *frpImpl) ToFileIndices(aOffset, bOffset int) (aIndex, bIndex int) {
+	aIndex = p.aRange.ToFileIndex(aOffset)
+	bIndex = p.bRange.ToFileIndex(bOffset)
 	return
 }
 
-func (p *FileRangePair) ToRangeOffsets(aIndex, bIndex int) (aOffset, bOffset int) {
-	aOffset = p.ARange.ToRangeOffset(aIndex)
-	bOffset = p.BRange.ToRangeOffset(bIndex)
+func (p *frpImpl) ToRangeOffsets(aIndex, bIndex int) (aOffset, bOffset int) {
+	aOffset = p.aRange.ToRangeOffset(aIndex)
+	bOffset = p.bRange.ToRangeOffset(bIndex)
 	return
 }
 
 // Not comparing actual content, just hashes and lengths.
-func (p *FileRangePair) CompareLines(aOffset, bOffset int, maxRareOccurrences uint8) (equal, approx, rare bool) {
+func (p *frpImpl) CompareLines(aOffset, bOffset int, maxRareOccurrences uint8) (equal, approx, rare bool) {
+	if glog.V(2) {
+		defer func() {
+			glog.V(2).Infof("frpImpl.CompareLines(%d, %d, %d) -> %v, %v, %v",
+				 aOffset, bOffset, maxRareOccurrences, equal, approx, rare)
+		}()
+	}
 	aIndex, bIndex := p.ToFileIndices(aOffset, bOffset)
-	aLP := &p.AFile.Lines[aIndex]
-	bLP := &p.BFile.Lines[bIndex]
-	if aLP.NormalizedHash != bLP.NormalizedHash {
-		return
-	}
-	if aLP.NormalizedLength != bLP.NormalizedLength {
-		return
-	}
-	approx = true
-	if aLP.Hash == bLP.Hash && aLP.Length == bLP.Length {
-		equal = true
-	}
-	if aLP.ProbablyCommon || bLP.ProbablyCommon {
-		return
-	}
-	if maxRareOccurrences < aLP.CountInFile {
-		return
-	}
-	if maxRareOccurrences < bLP.CountInFile {
-		return
-	}
-	rare = true
-	return
+	return p.filePair.CompareFileLines(aIndex, bIndex, maxRareOccurrences)
 }
 
 // Note that shared ends may overlap, as when comparing these two strings
 // for shared prefix and suffix: "ababababababa" and "ababa".
 // Returns true if fully consumed.
-func (p *FileRangePair) MeasureSharedEnds(onlyExactMatches bool, maxRareOccurrences uint8) SharedEndsData {
+func (p *frpImpl) MeasureSharedEnds(onlyExactMatches bool, maxRareOccurrences uint8) (result SharedEndsData) {
+	spewcfg := spew.Config
+	spewcfg.MaxDepth = 1
+	if glog.V(1) {
+		glog.Infof("frpImpl.MeasureSharedEnds: onlyExactMatches=%v, maxRareOccurrences=%v",
+				onlyExactMatches, maxRareOccurrences)
+		defer func() {
+			glog.Infof("frpImpl.MeasureSharedEnds ->\n%s", spewcfg.Sdump(result))
+		}()
+	}
 	key := SharedEndsKey{onlyExactMatches, maxRareOccurrences}
 	if p.sharedEndsMap == nil {
-		p.sharedEndsMap = make(map[SharedEndsKey]SharedEndsData)
+		p.sharedEndsMap = make(map[SharedEndsKey]*SharedEndsData)
 	} else if pData, ok := p.sharedEndsMap[key]; ok {
-		return *pData
+		glog.Infof("frpImpl.MeasureSharedEnds re-using earlier measurements")
+		result = *pData
+		return
 	}
+	glog.Infof("frpImpl.MeasureSharedEnds measuring...")
 	pData := &SharedEndsData{
 		SharedEndsKey: key,
 		Source: p,
 	}
+//	glog.Infof("first *pData\n%s", spewcfg.Sdump(*pData))
 	p.sharedEndsMap[key] = pData
 	if !p.BothAreNotEmpty() {
 		if p.BothAreEmpty() {
 			pData.RangesAreEqual = true
 		}
-		return *pData
+		result = *pData
+		return
 	}
-	loLength := MinInt(p.ALength, p.BLength)
-	hiLength := MaxInt(p.ALength, p.BLength)
+	loLength := MinInt(p.aLength, p.bLength)
+	hiLength := MaxInt(p.aLength, p.bLength)
+	glog.V(2).Infof("loLength=%d,  hiLength=%d", loLength, hiLength)
 	allExact := true
 	rareLength, nonRareLength := 0, 0
 	for n := 0; n < loLength; {
@@ -231,16 +186,18 @@ func (p *FileRangePair) MeasureSharedEnds(onlyExactMatches bool, maxRareOccurren
 	}
 	pData.RarePrefixLength = rareLength
 	pData.NonRarePrefixLength = nonRareLength
+//	glog.Infof("second *pData\n%s", spewcfg.Sdump(*pData))
 	if pData.NonRarePrefixLength == hiLength {
 		// All lines are equal, at least after normalization. In this
 		// situation, we skip spending time measuring the suffix length.
 		pData.RangesAreEqual = allExact
 		pData.RangesAreApproximatelyEqual = true
+//		glog.Infof("third *pData\n%s", spewcfg.Sdump(*pData))
 		return *pData
 	}
 	rareLength, nonRareLength = 0, 0
 	for n := 1; n <= loLength; n++ {
-		aOffset, bOffset := p.ALength-n, p.BLength-n
+		aOffset, bOffset := p.aLength-n, p.bLength-n
 		equal, approx, rare := p.CompareLines(aOffset, bOffset, maxRareOccurrences)
 		if !(equal || (approx && !onlyExactMatches)) {
 			break
@@ -252,25 +209,27 @@ func (p *FileRangePair) MeasureSharedEnds(onlyExactMatches bool, maxRareOccurren
 	}
 	pData.RareSuffixLength = rareLength
 	pData.NonRareSuffixLength = nonRareLength
-	return *pData
+//	glog.Infof("fourth *pData\n%s", spewcfg.Sdump(*pData))
+	result = *pData
+	return
 }
 
 /*
-func (p *FileRangePair) HasRarePrefixOrSuffix() bool {
+func (p *frpImpl) HasRarePrefixOrSuffix() bool {
 	return (p.BasicSharedEndsData.RarePrefixLength > 0 ||
 		p.BasicSharedEndsData.RareSuffixLength > 0)
 }
 
-func (p *FileRangePair) HasPrefixOrSuffix() bool {
+func (p *frpImpl) HasPrefixOrSuffix() bool {
 	return (p.BasicSharedEndsData.NonRarePrefixLength > 0 ||
 		p.BasicSharedEndsData.NonRareSuffixLength > 0)
 }
 
-func (p *FileRangePair) PrefixAndSuffixOverlap(rareEndsOnly bool) bool {
-	return p.BasicSharedEndsData.PrefixAndSuffixOverlap(rareEndsOnly, p.ALength, p.BLength)
+func (p *frpImpl) PrefixAndSuffixOverlap(rareEndsOnly bool) bool {
+	return p.BasicSharedEndsData.PrefixAndSuffixOverlap(rareEndsOnly, p.aLength, p.bLength)
 }
 
-func (p *FileRangePair) getPrefixAndSuffixLength(
+func (p *frpImpl) getPrefixAndSuffixLength(
 	onlyExactMatches bool, maxRareOccurrences uint8, rareEndsOnly bool) (
 	prefixLength, suffixLength int) {
 	sharedEndsData := p.MeasureSharedEnds(onlyExactMatches, maxRareOccurrences)
@@ -278,14 +237,16 @@ func (p *FileRangePair) getPrefixAndSuffixLength(
 }
 */
 
-func (p *FileRangePair) MakeSharedEndBlockPairs(
+func (p *frpImpl) MakeSharedEndBlockPairs(
 	rareEndsOnly, onlyExactMatches bool, maxRareOccurrences uint8) (
 	prefixPairs, suffixPairs []*BlockPair) {
 	sharedEndsData := p.MeasureSharedEnds(onlyExactMatches, maxRareOccurrences)
 	prefixLength, suffixLength := sharedEndsData.GetPrefixAndSuffixLengths(rareEndsOnly)
+	glog.Infof("frpImpl.MakeSharedEndBlockPairs: prefixLength=%d, suffixLength=%d",
+	prefixLength, suffixLength)
+
 	if prefixLength > 0 {
 		aLo, bLo := p.ToFileIndices(0, 0)
-		aHi, bHi := p.ToFileIndices(prefixLength, prefixLength)
 		prefixPairs = append(prefixPairs, &BlockPair{
 			AIndex: aLo,
 			ALength: prefixLength,
@@ -294,35 +255,37 @@ func (p *FileRangePair) MakeSharedEndBlockPairs(
 			IsMatch: true,
 			IsNormalizedMatch: !onlyExactMatches,   // Don't know if it is an exact match or normalized.
 		})
+		glog.Infof("Prefix BlockPair: %v", prefixPairs[0])
+
 	}
 	if suffixLength > 0 {
-		aLo, bLo := p.ToFileIndices(p.ALength - suffixLength, p.BLength - suffixLength)
-		aHi, bHi := p.ToFileIndices(p.ALength, p.BLength)
+		aLo, bLo := p.ToFileIndices(p.aLength - suffixLength, p.bLength - suffixLength)
 		suffixPairs = append(suffixPairs, &BlockPair{
 			AIndex: aLo,
-			ALength: prefixLength,
+			ALength: suffixLength,
 			BIndex: bLo,
-			BLength: prefixLength,
+			BLength: suffixLength,
 			IsMatch: true,
 			IsNormalizedMatch: !onlyExactMatches,   // Don't know if it is an exact match or normalized.
 		})
+		glog.Infof("Suffix BlockPair: %v", suffixPairs[0])
 	}
 	// TODO Maybe provide an option to split into exact and normalized matches?
 	return
 }
 
 // Returns p if there is no shared prefix or suffix.
-func (p *FileRangePair) MakeMiddleRangePair(
-	rareEndsOnly, onlyExactMatches bool, maxRareOccurrences uint8) *FileRangePair {
+func (p *frpImpl) MakeMiddleRangePair(
+	rareEndsOnly, onlyExactMatches bool, maxRareOccurrences uint8) FileRangePair {
 	sharedEndsData := p.MeasureSharedEnds(onlyExactMatches, maxRareOccurrences)
 	prefixLength, suffixLength := sharedEndsData.GetPrefixAndSuffixLengths(rareEndsOnly)
-	aHi := p.ALength - suffixLength
-	bHi := p.BLength - suffixLength
+	aHi := p.aLength - suffixLength
+	bHi := p.bLength - suffixLength
 	return p.MakeSubRangePair(prefixLength, aHi-prefixLength, prefixLength, bHi-prefixLength)
 }
 
 //// Convert from IndexPairs of AOffset and BOffset values to AIndex and BIndex values.
-//func (p *FileRangePair) OffsetPairsToIndexPairs(offsetPairs []IndexPair) (indexPairs []IndexPair) {
+//func (p *frpImpl) OffsetPairsToIndexPairs(offsetPairs []IndexPair) (indexPairs []IndexPair) {
 //	for _, pair := range offsetPairs {
 //		aIndex, bIndex := p.ToFileIndices(pair.Index1, pair.Index2)
 //		newPair := IndexPair{aIndex, bIndex}
@@ -331,60 +294,21 @@ func (p *FileRangePair) MakeMiddleRangePair(
 //	return
 //}
 
-type SimilarityFactors struct {
-	ExactRare          float32
-	NormalizedRare     float32
-	ExactNonRare       float32
-	NormalizedNonRare  float32
-	MaxRareOccurrences uint8
-}
-
-func (s *SimilarityFactors) SimilarityOfLines(pair *FileRangePair, aOffset, bOffset int) float32 {
-	equal, approx, rare := pair.CompareLines(aOffset, bOffset, s.MaxRareOccurrences)
-	if equal {
-		if rare {
-			return s.ExactRare
-		} else {
-			return s.ExactNonRare
-		}
-	}
-	if approx {
-		if rare {
-			return s.NormalizedRare
-		} else {
-			return s.NormalizedNonRare
-		}
-	}
-	return 0
-}
-
-func (p *FileRangePair) ComputeWeightedLCS(
-	s *SimilarityFactors) (lcsOffsetPairs []IndexPair, score float32) {
-	if p.ALength == 0 || p.BLength == 0 { return }
-	computeSimilarity := func(aOffset, bOffset int) float32 {
-		return s.SimilarityOfLines(p, aOffset, bOffset)
-	}
-	glog.Infof("ComputeWeightedLCS: %s", p.BriefDebugString())
-	lcsOffsetPairs, score = WeightedLCS(p.ALength, p.BLength, computeSimilarity)
-	glog.Infof("ComputeWeightedLCS: LCS length == %d,   LCS score: %v", len(lcsOffsetPairs), score)
-	return
-}
-
 // Assuming here that there are no moves (relative to aRange and bRange).
-func (p *FileRangePair) MatchingOffsetsToBlockPairs(
-	matchingOffsets []IndexPair, matchedNormalizedLines bool,
+func MatchingRangePairOffsetsToBlockPairs(
+	frp FileRangePair, matchingOffsets []IndexPair, matchedNormalizedLines bool,
 	maxRareOccurrences uint8) (blockPairs []*BlockPair) {
 	matchingOffsets = append([]IndexPair(nil), matchingOffsets...)
 	SortIndexPairsByIndex1(matchingOffsets)
 	// Convert these to BlockPair(s) with range offsets, rather than file indices;
-	// we'll switch them later when it is cheaper (i.e. fewer conversions typically).
+	// we'll switch them later in the function when it is cheaper (i.e. fewer conversions typically).
 	var pair *BlockPair
 	for i, m := range matchingOffsets {
 		glog.V(1).Infof("matchingOffsets[%d] = %v", i, m)
 		aOffset, bOffset := m.Index1, m.Index2
 		isExactMatch := true
 		if matchedNormalizedLines {
-			isExactMatch, _, _ = p.CompareLines(aOffset, bOffset, maxRareOccurrences)
+			isExactMatch, _, _ = frp.CompareLines(aOffset, bOffset, maxRareOccurrences)
 		}
 		// Can we just grow the current BlockPair?
 		if pair != nil && pair.IsMatch == isExactMatch &&
@@ -409,14 +333,14 @@ func (p *FileRangePair) MatchingOffsetsToBlockPairs(
 		blockPairs = append(blockPairs, pair)
 	}
 	for _, pair := range blockPairs {
-		pair.AIndex, pair.BIndex = p.ToFileIndices(pair.AIndex, pair.BIndex)
+		pair.AIndex, pair.BIndex = frp.ToFileIndices(pair.AIndex, pair.BIndex)
 	}
 	glog.Infof("MatchingOffsetsToBlockPairs converted %d matching lines to %d BlockPairs",
 		len(matchingOffsets), len(blockPairs))
 	return
 }
-
-func (p *FileRangePair) ComputeWeightedLCSBlockPairs(
+/*
+func (p *frpImpl) ComputeWeightedLCSBlockPairs(
 		s SimilarityFactors) (blockPairs []*BlockPair, score float32) {
 	lcsOffsetPairs, score := p.ComputeWeightedLCS(&s)
 	matchedNormalizedLines := s.NormalizedNonRare > 0 || s.NormalizedRare > 0
@@ -424,12 +348,4 @@ func (p *FileRangePair) ComputeWeightedLCSBlockPairs(
 		lcsOffsetPairs, matchedNormalizedLines, s.MaxRareOccurrences)
 	return blockPairs, score
 }
-
-func (p *FileRangePair) CanFillGapWithMatches(pair1, pair2 *BlockPair) bool {
-	// File indices
-	aLo, bLo := pair1.ABeyond(), pair1.BBeyond()
-	aHi, bHi := pair2.AIndex, pair2.BIndex
-	// C
-	
-
-}
+*/

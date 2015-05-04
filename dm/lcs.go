@@ -76,3 +76,50 @@ func WeightedLCS(aLength, bLength int, getSimilarity func(aIndex, bIndex int) fl
 
 	return result, table[aLength][bLength]
 }
+
+type SimilarityFactors struct {
+	ExactRare          float32
+	NormalizedRare     float32
+	ExactNonRare       float32
+	NormalizedNonRare  float32
+	MaxRareOccurrences uint8
+}
+
+func (s *SimilarityFactors) SimilarityOfRangeLines(pair FileRangePair, aOffset, bOffset int) float32 {
+	equal, approx, rare := pair.CompareLines(aOffset, bOffset, s.MaxRareOccurrences)
+	if equal {
+		if rare {
+			return s.ExactRare
+		} else {
+			return s.ExactNonRare
+		}
+	}
+	if approx {
+		if rare {
+			return s.NormalizedRare
+		} else {
+			return s.NormalizedNonRare
+		}
+	}
+	return 0
+}
+
+func WeightedLCSOffsetsOfRangePair(pair FileRangePair, sf SimilarityFactors) (lcsOffsetPairs []IndexPair, score float32) {
+	aLength, bLength := pair.ALength(), pair.BLength()
+	if aLength == 0 || bLength == 0 { return }
+	computeSimilarity := func(aOffset, bOffset int) float32 {
+		return sf.SimilarityOfRangeLines(pair, aOffset, bOffset)
+	}
+	glog.Infof("WeightedLCSOfRangePair: %s", pair.BriefDebugString())
+	lcsOffsetPairs, score = WeightedLCS(aLength, bLength, computeSimilarity)
+	glog.Infof("WeightedLCSOfRangePair: LCS length == %d,   LCS score: %v", len(lcsOffsetPairs), score)
+	return
+}
+
+func WeightedLCSBlockPairsOfRangePair(
+		pair FileRangePair, sf SimilarityFactors) (blockPairs []*BlockPair, score float32) {
+	lcsOffsetPairs, score := WeightedLCSOffsetsOfRangePair(pair, sf)
+	matchedNormalizedLines := sf.NormalizedNonRare > 0 || sf.NormalizedRare > 0
+	blockPairs = MatchingRangePairOffsetsToBlockPairs(pair, lcsOffsetPairs, matchedNormalizedLines, sf.MaxRareOccurrences)
+	return blockPairs, score
+}

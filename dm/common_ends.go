@@ -14,11 +14,11 @@ type MatchCommonXFunc func(aRange, bRange FileRange, normalized bool) (
 func MatchCommonPrefix(aRange, bRange FileRange, normalized bool) (
 	aRemaining, bRemaining FileRange, commonPrefix *BlockPair) {
 
-	aLineCount, bLineCount := aRange.LineCount(), bRange.LineCount()
-	limit := MinInt(aLineCount, bLineCount)
+	aLength, bLength := aRange.Length(), bRange.Length()
+	limit := MinInt(aLength, bLength)
 
-	glog.Info("MatchCommonPrefix: ", aLineCount, " lines from A, ",
-		bLineCount, " lines from B, limit of ", limit,
+	glog.Info("MatchCommonPrefix: ", aLength, " lines from A, ",
+		bLength, " lines from B, limit of ", limit,
 		chooseString(normalized, "; comparing normalized lines", ""))
 
 	length := 0
@@ -43,11 +43,11 @@ func MatchCommonPrefix(aRange, bRange FileRange, normalized bool) (
 
 	glog.Infof("MatchCommonPrefix: emit BlockPair: %v", *commonPrefix)
 
-	if length < aLineCount {
-		aRemaining = aRange.MakeSubRange(length, aLineCount-length)
+	if length < aLength {
+		aRemaining = aRange.MakeSubRange(length, aLength-length)
 	}
-	if length < bLineCount {
-		bRemaining = bRange.MakeSubRange(length, bLineCount-length)
+	if length < bLength {
+		bRemaining = bRange.MakeSubRange(length, bLength-length)
 	}
 	return
 }
@@ -59,15 +59,15 @@ func MatchCommonPrefix(aRange, bRange FileRange, normalized bool) (
 func MatchCommonSuffix(aRange, bRange FileRange, normalized bool) (
 	aRemaining, bRemaining FileRange, commonSuffix *BlockPair) {
 
-	aLineCount, bLineCount := aRange.LineCount(), bRange.LineCount()
-	limit := MinInt(aLineCount, bLineCount)
+	aLength, bLength := aRange.Length(), bRange.Length()
+	limit := MinInt(aLength, bLength)
 
-	glog.Info("MatchCommonSuffix: ", aLineCount, " lines from A, ",
-		bLineCount, " lines from B, limit of ", limit,
+	glog.Info("MatchCommonSuffix: ", aLength, " lines from A, ",
+		bLength, " lines from B, limit of ", limit,
 		chooseString(normalized, "; comparing normalized lines", ""))
 
 	length := 0
-	aOffset, bOffset := aLineCount-1, bLineCount-1
+	aOffset, bOffset := aLength-1, bLength-1
 	for length < limit {
 		ah := aRange.LineHashAtOffset(aOffset, normalized)
 		bh := bRange.LineHashAtOffset(bOffset, normalized)
@@ -94,10 +94,10 @@ func MatchCommonSuffix(aRange, bRange FileRange, normalized bool) (
 
 	glog.Infof("MatchCommonSuffix: emit BlockPair: %v", *commonSuffix)
 
-	if length < aLineCount {
+	if length < aLength {
 		aRemaining = aRange.MakeSubRange(0, length)
 	}
-	if length < bLineCount {
+	if length < bLength {
 		bRemaining = bRange.MakeSubRange(0, length)
 	}
 	return
@@ -112,7 +112,7 @@ func MatchCommonEnds(aRange, bRange FileRange, prefix, suffix, normalized bool) 
 	}
 
 	glog.Infof("MatchCommonEnds A lines: %d; B lines: %d; prefix: %v; suffix: %v; normalized: %v",
-		aRange.LineCount(), bRange.LineCount(),
+		aRange.Length(), bRange.Length(),
 		prefix, suffix, normalized)
 
 	tryMatch := func(matcher MatchCommonXFunc) (done bool) {
@@ -123,20 +123,20 @@ func MatchCommonEnds(aRange, bRange FileRange, prefix, suffix, normalized bool) 
 		}
 		pairs = append(pairs, bp)
 		if aRest == nil {
-			glog.Infof("MatchCommonEnds: matched ALL %d lines of aRange", aRange.LineCount())
+			glog.Infof("MatchCommonEnds: matched ALL %d lines of aRange", aRange.Length())
 			done = true
 		} else {
-			before, after := aRange.LineCount(), aRest.LineCount()
+			before, after := aRange.Length(), aRest.Length()
 			if after != before {
 				glog.Infof("MatchCommonEnds: matched %d lines of %d, leaving %d  (aRange)",
 					before-after, before, after)
 			}
 		}
 		if bRest == nil {
-			glog.Infof("MatchCommonEnds: matched ALL %d lines of bRange", bRange.LineCount())
+			glog.Infof("MatchCommonEnds: matched ALL %d lines of bRange", bRange.Length())
 			done = true
 		} else {
-			before, after := bRange.LineCount(), bRest.LineCount()
+			before, after := bRange.Length(), bRest.Length()
 			if after != before {
 				glog.Infof("MatchCommonEnds: matched %d lines of %d, leaving %d  (bRange)",
 					before-after, before, after)

@@ -34,7 +34,7 @@ func MaxInt(i, j int) int {
 		return i
 	}
 }
-
+/*
 func MinFloat32(u, v float32) float32 {
 	if u < v {
 		return u
@@ -60,6 +60,21 @@ func Max3Float32(u, v, w float32) float32 {
 	}
 	if u < w {
 		return w
+	}
+	return u
+}
+*/
+
+func MinFloat32(u float32, vs ...float32) float32 {
+	for _, v := range vs {
+		if v < u { u = v }
+	}
+	return u
+}
+
+func MaxFloat32(u float32, vs ...float32) float32 {
+	for _, v := range vs {
+		if v > u { u = v }
 	}
 	return u
 }
@@ -260,7 +275,7 @@ func ComputeIsProbablyCommon(normalizedLine []byte) bool {
 func computeNumRareLinesInRange(
 	fr FileRange, omitProbablyCommon bool, maxCountInFile int) (num int) {
 	maxCountInFile = MaxInt(1, maxCountInFile)
-	for n := 0; n < fr.LineCount(); n++ {
+	for n := 0; n < fr.Length(); n++ {
 		lp := fr.LinePosAtOffset(n)
 		if omitProbablyCommon && lp.ProbablyCommon {
 			continue

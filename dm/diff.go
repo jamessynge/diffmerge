@@ -280,11 +280,11 @@ func (p *diffState) exp_phase5_moves_and_copies() {
 	minExtraBLinesForProcessing := 3
 
 	p.processAllGapsInB(true, func() {
-		numBRangeLines := p.bRange.LineCount()
-		extraBLines := numBRangeLines - p.aRange.LineCount()
+		numBRangeLines := p.bRange.Length()
+		extraBLines := numBRangeLines - p.aRange.Length()
 
 		glog.Infof("Processing gap of %d A lines, %d B lines, with %d extra B lines:\nB BlockPair before: %v\nB BlockPair after: %v",
-			p.aRange.LineCount(), numBRangeLines,
+			p.aRange.Length(), numBRangeLines,
 			extraBLines, p.pairBeforeGap, p.pairAfterGap)
 
 		if extraBLines < minExtraBLinesForProcessing {
@@ -491,7 +491,7 @@ func (p *diffState) exp_phase4_moves() (multipleCandidatesFound bool) {
 		}
 
 		glog.Infof("Searching gaps in B that match gap %d in A, [%d, %d)",
-			an, aRange.FirstIndex(), aRange.LineCount()+aRange.FirstIndex())
+			an, aRange.FirstIndex(), aRange.Length()+aRange.FirstIndex())
 
 		var candidates MoveCandidates
 		for bn, bRange := range bGapRanges {
@@ -502,7 +502,7 @@ func (p *diffState) exp_phase4_moves() (multipleCandidatesFound bool) {
 			}
 
 			glog.Infof("Comparing gap %d in A against gap %d in B, [%d, %d)",
-				an, bn, bRange.FirstIndex(), bRange.LineCount()+bRange.FirstIndex())
+				an, bn, bRange.FirstIndex(), bRange.Length()+bRange.FirstIndex())
 
 			p.aRange = aRange
 			p.bRange = bRange
@@ -787,13 +787,13 @@ func (p *diffState) matchRangeEndsAndMaybeBackoff(performBackoff bool) bool {
 	// already built...  (i.e. I really just want the new BlockPairs on either
 	// side of the new p.aRange and p.bRange).
 	aStart, bStart := aRange.FirstIndex(), bRange.FirstIndex()
-	aBeyond, bBeyond := aStart+aRange.LineCount(), bStart+bRange.LineCount()
+	aBeyond, bBeyond := aStart+aRange.Length(), bStart+bRange.Length()
 
 	glog.V(1).Info("matchRangeEndsAndMaybeBackoff performing backoff")
 
 	isTargetRange := func() bool {
 		newAStart, newBStart := p.aRange.FirstIndex(), p.bRange.FirstIndex()
-		newABeyond, newBBeyond := newAStart+p.aRange.LineCount(), newBStart+p.bRange.LineCount()
+		newABeyond, newBBeyond := newAStart+p.aRange.Length(), newBStart+p.bRange.Length()
 		return aStart <= newAStart && newABeyond <= aBeyond && bStart <= newBStart && newBBeyond <= bBeyond
 	}
 
@@ -939,9 +939,9 @@ func (p *diffState) rangeToBlockPairs() (newPairs []*BlockPair) {
 			p.config.RequireSameRarity, p.config.OmitProbablyCommonLines,
 			p.config.MaxRareLineOccurrencesInRange, p.config.MaxRareLineOccurrencesInFile)
 		glog.V(1).Info("rangeToBlockPairs found ", len(aLines), " rare lines in A, of ",
-			p.aRange.LineCount(), " middle lines")
+			p.aRange.Length(), " middle lines")
 		glog.V(1).Info("rangeToBlockPairs found ", len(bLines), " rare lines in B, of ",
-			p.bRange.LineCount(), " middle lines")
+			p.bRange.Length(), " middle lines")
 		if len(aLines) == 0 || len(bLines) == 0 {
 			return
 		}
@@ -1386,9 +1386,9 @@ func (p *diffState) gapsInAToARanges() (ranges []FileRange) {
 		}
 		ai = MaxInt(ai, pair.ABeyond())
 	}
-	if ai < p.aFullRange.LineCount() {
+	if ai < p.aFullRange.Length() {
 		// Gap at the end.
-		newRange := p.aFullRange.MakeSubRange(ai, p.aFullRange.LineCount()-ai)
+		newRange := p.aFullRange.MakeSubRange(ai, p.aFullRange.Length()-ai)
 		ranges = append(ranges, newRange)
 	}
 	return
@@ -1408,9 +1408,9 @@ func (p *diffState) gapsInBToBRanges() (ranges []FileRange) {
 		}
 		bi = MaxInt(bi, pair.BBeyond())
 	}
-	if bi < p.bFullRange.LineCount() {
+	if bi < p.bFullRange.Length() {
 		// Gap at the end.
-		newRange := p.bFullRange.MakeSubRange(bi, p.bFullRange.LineCount()-bi)
+		newRange := p.bFullRange.MakeSubRange(bi, p.bFullRange.Length()-bi)
 		ranges = append(ranges, newRange)
 	}
 	return

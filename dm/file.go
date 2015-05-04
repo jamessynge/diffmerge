@@ -2,8 +2,10 @@ package dm
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"path"
 
 	"github.com/golang/glog"
 )
@@ -21,11 +23,18 @@ type File struct {
 	FileRanges map[IndexPair]FileRange
 }
 
+
+func (p *File) BriefDebugString() string {
+	return fmt.Sprintf("File{\"%s\", %d lines, %d bytes",
+		path.Base(p.Name), len(p.Lines), len(p.Body))
+}
+
 func (p *File) GetFullRange() FileRange {
 	return p.FullRange
 }
 
 func (p *File) MakeSubRange(start, length int) FileRange {
+	glog.V(1).Infof("File.MakeSubRange [%d, +%d)", start, length)
 	lc := p.LineCount()
 	if !(0 <= start && start+length <= lc && length >= 0) {
 		glog.Fatalf("New range [%d, %d) is invalid (max length %d)",
@@ -35,6 +44,7 @@ func (p *File) MakeSubRange(start, length int) FileRange {
 	if p.FileRanges == nil {
 		p.FileRanges = make(map[IndexPair]FileRange)
 	} else if fr, ok := p.FileRanges[key]; ok {
+		glog.V(1).Infof("File.MakeSubRange reusing existing FileRange")
 		return fr
 	}
 	fr := &fileRange{
