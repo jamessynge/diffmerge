@@ -24,7 +24,7 @@ type FileRangePair interface {
 
 	ToFileIndices(aOffset, bOffset int) (aIndex, bIndex int)
 	ToRangeOffsets(aIndex, bIndex int) (aOffset, bOffset int)
-	MakeSubRangePair(aIndex, aLength, bIndex, bLength int) FileRangePair
+	MakeSubRangePair(aOffset, aLength, bOffset, bLength int) FileRangePair
 
 	BriefDebugString() string
 

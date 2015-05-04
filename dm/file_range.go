@@ -20,6 +20,9 @@ type FileRange interface {
 	// Returns the index of the first line (zero for the whole file).
 	FirstIndex() int
 
+	// Returns index of line immediately after the range.
+	BeyondIndex() int
+
 	// Returns the LinePos for the line at offset within this range (where zero
 	// is the first line in the range).
 	LinePosAtOffset(offsetInRange int) LinePos
@@ -81,6 +84,7 @@ func CreateFileRange(file *File, start, length int) FileRange {
 func (p *fileRange) Length() int { return p.length }
 func (p *fileRange) IsEmpty() bool { return p == nil || p.Length() == 0 }
 func (p *fileRange) FirstIndex() int { return p.start }
+func (p *fileRange) BeyondIndex() int { return p.start + p.length }
 
 func (p *fileRange) LinePosAtOffset(offsetInRange int) LinePos {
 	return p.file.Lines[p.start+offsetInRange]

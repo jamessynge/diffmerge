@@ -70,7 +70,7 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 
 	lcsData := PerformLCS(middleRangePair, config, sf)
 
-	if true {
+	if false {
 		if mase != nil  {
 			pairs = append(pairs, mase.sharedPrefixPairs...)
 		}
@@ -84,6 +84,15 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 		return
 	}
 
+	// TODO Phase 3: Small edit detection.
+
+	var middleBlockPairs []*BlockPair
+	if mase != nil  {
+		middleBlockPairs = append(middleBlockPairs, mase.sharedSuffixPairs...)
+	}
+	aGapRanges, bGapRanges := FindGapsInRangePair(middleRangePair, middleBlockPairs)
+
+	
 
 
 
