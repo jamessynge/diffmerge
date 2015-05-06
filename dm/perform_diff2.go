@@ -90,11 +90,22 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 	if mase != nil  {
 		middleBlockPairs = append(middleBlockPairs, mase.sharedSuffixPairs...)
 	}
-	aGapRanges, bGapRanges := FindGapsInRangePair(middleRangePair, middleBlockPairs)
-
-	
+	middleBlockPairs = PerformSmallEditDetectionInGaps(middleRangePair, middleBlockPairs, config)
 
 
+	if false {
+		if mase != nil  {
+			pairs = append(pairs, mase.sharedPrefixPairs...)
+		}
+		if lcsData != nil {
+			pairs = append(pairs, lcsData.lcsPairs...)
+		}
+		if mase != nil  {
+			pairs = append(pairs, mase.sharedSuffixPairs...)
+		}
+		SortBlockPairsByAIndex(pairs)
+		return
+	}
 
 	// TODO Phase 4: move detection
 
