@@ -16,21 +16,17 @@ func PerformMoveDetectionInGaps(
 	glog.Infof("len(aGapRanges) == %d", len(aGapRanges))
 	glog.Infof("len(bGapRanges) == %d", len(bGapRanges))
 
-	for n, aGapFR := range(aGapRanges) {
-		glog.Infof("Comparing gap in A to all gaps in B: aGapFR %#v", aGapFR)
-
+	for i, aGapFR := range aGapRanges {
 		if aGapFR.Length() == 0 { continue }
 
+		glog.Infof("Comparing gap %d in A to all gaps in B: aGapFR %#v", i, aGapFR)
+
+		for j, bGapFR := range bGapRanges {
+			if bGapFr.Length() == 0 { continue }
+			glog.Infof("Comparing gap %d in A to gap %d in B: bGapFR %#v", i, j, bGapFR)
 
 
-
-
-		bGapFR := bGapRanges[n]
-
-		glog.Infof("aGapFR: %#v", aGapFR)
-		glog.Infof("bGapFR: %#v", bGapFR)
-
-		glog.Info("TODO develop criteria for deciding if a mismatch is likely an edit")
+		}
 	}
 
 	return

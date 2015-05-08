@@ -84,14 +84,14 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 		return
 	}
 
-	// TODO Phase 3: Small edit detection.
+	// TODO Phase 3: Small edit detection (nearly match gap in A with corresponding
+	// gap in B)
 
 	var middleBlockPairs []*BlockPair
 	if mase != nil  {
 		middleBlockPairs = append(middleBlockPairs, mase.sharedSuffixPairs...)
 	}
 	middleBlockPairs = PerformSmallEditDetectionInGaps(middleRangePair, middleBlockPairs, config)
-
 
 	if false {
 		if mase != nil  {
@@ -107,9 +107,26 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 		return
 	}
 
-	// TODO Phase 4: move detection
+	// TODO Phase 4: move detection (match a gap in A with some gap(s) in B)
 
-	// TODO Phase 5: copy detection
+	middleBlockPairs = PerformMoveDetectionInGaps(middleRangePair, middleBlockPairs, config)
+
+	if false {
+		if mase != nil  {
+			pairs = append(pairs, mase.sharedPrefixPairs...)
+		}
+		if lcsData != nil {
+			pairs = append(pairs, lcsData.lcsPairs...)
+		}
+		if mase != nil  {
+			pairs = append(pairs, mase.sharedSuffixPairs...)
+		}
+		SortBlockPairsByAIndex(pairs)
+		return
+	}
+
+	// TODO Phase 5: copy detection (match a gap in B with similar size region in B)
+	
 
 
 
