@@ -20,6 +20,7 @@ func PerformSmallEditDetectionInGaps(
 		glog.Infof("aGapFR: %#v", aGapFR)
 		glog.Infof("bGapFR: %#v", bGapFR)
 
+		glog.Info("TODO develop criteria for deciding if a mismatch is likely an edit")
 	}
 
 	return
