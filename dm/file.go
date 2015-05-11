@@ -19,13 +19,12 @@ type File struct {
 	Body  []byte    // Body of the file
 	Lines []LinePos // Locations and hashes of the file lines.
 
-	FullRange FileRange
+	FullRange  FileRange
 	FileRanges map[IndexPair]FileRange
 }
 
-
 func (p *File) BriefDebugString() string {
-	return fmt.Sprintf("File{\"%s\", %d lines, %d bytes",
+	return fmt.Sprintf("File{\"%s\", %d lines, %d bytes}",
 		path.Base(p.Name), len(p.Lines), len(p.Body))
 }
 
@@ -34,7 +33,7 @@ func (p *File) GetFullRange() FileRange {
 }
 
 func (p *File) MakeSubRange(start, length int) FileRange {
-	glog.V(1).Infof("File.MakeSubRange [%d, +%d)", start, length)
+	glog.V(1).Infof("File.MakeSubRange [%d, %d)", start, start+length)
 	lc := p.LineCount()
 	if !(0 <= start && start+length <= lc && length >= 0) {
 		glog.Fatalf("New range [%d, %d) is invalid (max length %d)",

@@ -6,9 +6,24 @@ import (
 )
 
 type lcsOfFileRangePair struct {
-	fileRangePair FileRangePair
-	lcsPairs []*BlockPair
-	lcsScore float32
+	fileRangePair   FileRangePair
+	lcsPairs        BlockPairs
+	lcsScore        float32
+	limitsInA       IndexPair
+	limitsInB       IndexPair
+	numMatchedLines int
+}
+
+func (p *lcsOfFileRangePair) AExtent() int {
+	aIndex := p.lcsPairs[0].AIndex
+	aBeyond := p.lcsPairs[len(p.lcsPairs)-1].ABeyond()
+	return aBeyond - aIndex
+}
+
+func (p *lcsOfFileRangePair) BExtent() int {
+	bIndex := p.lcsPairs[0].BIndex
+	bBeyond := p.lcsPairs[len(p.lcsPairs)-1].BBeyond()
+	return bBeyond - bIndex
 }
 
 // Compute Longest Common Subsequence of lines in two file ranges.  Returns
@@ -16,19 +31,16 @@ type lcsOfFileRangePair struct {
 func PerformLCS(fileRangePair FileRangePair, config DifferencerConfig, sf SimilarityFactors) *lcsOfFileRangePair {
 	glog.Infof("PerformLCS - DifferencerConfig:\n%s\n\nSimilarityFactors:\n%s\n",
 		spew.Sdump(config), spew.Sdump(sf))
-
 	lcsPairs, score := WeightedLCSBlockPairsOfRangePair(fileRangePair, sf)
 	glog.Infof("PerformLCS - score: %v", score)
-
-	if len(lcsPairs) == 0 { return nil }
-	mayHaveMatchableGaps := (
-			sf.NormalizedNonRare == 0 ||
-			sf.ExactNonRare == 0 ||
-			sf.NormalizedRare == 0 ||
-			sf.ExactRare == 0)
-
+	if len(lcsPairs) == 0 {
+		return nil
+	}
+	mayHaveMatchableGaps := len(lcsPairs) > 1 && (sf.NormalizedNonRare == 0 ||
+		sf.ExactNonRare == 0 ||
+		sf.NormalizedRare == 0 ||
+		sf.ExactRare == 0)
 	glog.Infof("PerformLCS - mayHaveMatchableGaps: %v", mayHaveMatchableGaps)
-
 	if mayHaveMatchableGaps {
 		// Fill the gaps.
 		filledGaps := FillGapsWithEasyMatches(fileRangePair, lcsPairs)
@@ -37,11 +49,14 @@ func PerformLCS(fileRangePair FileRangePair, config DifferencerConfig, sf Simila
 			SortBlockPairsByAIndex(lcsPairs)
 		}
 	}
-	return &lcsOfFileRangePair{
+	lcsData := &lcsOfFileRangePair{
 		fileRangePair: fileRangePair,
-		lcsPairs: lcsPairs,
-		lcsScore: score,
+		lcsPairs:      BlockPairs(lcsPairs),
+		lcsScore:      score,
 	}
+	lcsData.limitsInA, lcsData.limitsInB = lcsData.lcsPairs.LimitIndexPairs()
+	lcsData.numMatchedLines, _ = lcsData.lcsPairs.CountLinesInPairs()
+	return lcsData
 }
 
 func FillGapsWithEasyMatches(frp FileRangePair, blockPairs []*BlockPair) (filledGaps []*BlockPair) {

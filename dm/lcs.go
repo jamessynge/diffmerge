@@ -1,6 +1,7 @@
 package dm
 
 import (
+	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/glog"
 )
 
@@ -105,19 +106,32 @@ func (s *SimilarityFactors) SimilarityOfRangeLines(pair FileRangePair, aOffset, 
 }
 
 func WeightedLCSOffsetsOfRangePair(pair FileRangePair, sf SimilarityFactors) (lcsOffsetPairs []IndexPair, score float32) {
+	glog.Infof("WeightedLCSOffsetsOfRangePair sf: %s", spew.Sdump(sf))
+
 	aLength, bLength := pair.ALength(), pair.BLength()
-	if aLength == 0 || bLength == 0 { return }
-	computeSimilarity := func(aOffset, bOffset int) float32 {
-		return sf.SimilarityOfRangeLines(pair, aOffset, bOffset)
+	if aLength == 0 || bLength == 0 {
+		return
 	}
-	glog.Infof("WeightedLCSOfRangePair: %s", pair.BriefDebugString())
+	var computeSimilarity func(aOffset, bOffset int) float32
+	if glog.V(1) {
+		computeSimilarity = func(aOffset, bOffset int) float32 {
+			result := sf.SimilarityOfRangeLines(pair, aOffset, bOffset)
+			glog.Infof("Similarity -> %v", result)
+			return result
+		}
+	} else {
+		computeSimilarity = func(aOffset, bOffset int) float32 {
+			return sf.SimilarityOfRangeLines(pair, aOffset, bOffset)
+		}
+	}
+	glog.Infof("WeightedLCSOffsetsOfRangePair: %s", pair.BriefDebugString())
 	lcsOffsetPairs, score = WeightedLCS(aLength, bLength, computeSimilarity)
-	glog.Infof("WeightedLCSOfRangePair: LCS length == %d,   LCS score: %v", len(lcsOffsetPairs), score)
+	glog.Infof("WeightedLCSOffsetsOfRangePair: LCS length == %d,   LCS score: %v", len(lcsOffsetPairs), score)
 	return
 }
 
 func WeightedLCSBlockPairsOfRangePair(
-		pair FileRangePair, sf SimilarityFactors) (blockPairs []*BlockPair, score float32) {
+	pair FileRangePair, sf SimilarityFactors) (blockPairs []*BlockPair, score float32) {
 	lcsOffsetPairs, score := WeightedLCSOffsetsOfRangePair(pair, sf)
 	matchedNormalizedLines := sf.NormalizedNonRare > 0 || sf.NormalizedRare > 0
 	blockPairs = MatchingRangePairOffsetsToBlockPairs(pair, lcsOffsetPairs, matchedNormalizedLines, sf.MaxRareOccurrences)

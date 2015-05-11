@@ -5,8 +5,8 @@ import (
 )
 
 func PerformSmallEditDetectionInGaps(
-		frp FileRangePair, blockPairs []*BlockPair, config DifferencerConfig) (
-		outputBlockPairs []*BlockPair) {
+	frp FileRangePair, blockPairs BlockPairs, config DifferencerConfig) (
+	outputBlockPairs BlockPairs) {
 	defer glog.Flush()
 
 	aGapRanges, bGapRanges := FindGapsInRangePair(frp, blockPairs)
@@ -14,15 +14,23 @@ func PerformSmallEditDetectionInGaps(
 	glog.Infof("len(aGapRanges) == %d", len(aGapRanges))
 	glog.Infof("len(bGapRanges) == %d", len(bGapRanges))
 
-	for n, aGapFR := range(aGapRanges) {
+	var newBlockPairs BlockPairs
+
+	for n, aGapFR := range aGapRanges {
 		bGapFR := bGapRanges[n]
-
-		glog.Infof("aGapFR: %#v", aGapFR)
-		glog.Infof("bGapFR: %#v", bGapFR)
-
-		glog.Info("TODO develop criteria for deciding if a mismatch is likely an edit")
+		if glog.V(1) {
+			glog.Infof("Comparing gap ranges #%d to each other\n", n)
+			glog.Infof("aGapFR: %s", aGapFR)
+			glog.Infof("bGapFR: %s", bGapFR)
+		}
+		if aGapFR.Length() == 0 || bGapFR.Length() == 0 {
+			continue
+		}
+		glog.Info("TODO develop criteria for deciding if a mismatch is likely an edit\n")
 	}
 
+	outputBlockPairs = append(outputBlockPairs, blockPairs...)
+	outputBlockPairs = append(outputBlockPairs, newBlockPairs...)
+	SortBlockPairsByAIndex(outputBlockPairs)
 	return
 }
-

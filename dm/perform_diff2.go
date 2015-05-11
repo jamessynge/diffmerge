@@ -11,17 +11,17 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 			return nil // They're the same.
 		}
 		pair := &BlockPair{
-			AIndex: 0,
+			AIndex:  0,
 			ALength: 0,
-			BIndex: 0,
+			BIndex:  0,
 			BLength: bFile.LineCount(),
 		}
 		return append(pairs, pair)
 	} else if bFile.LineCount() == 0 {
 		pair := &BlockPair{
-			AIndex: 0,
+			AIndex:  0,
 			ALength: aFile.LineCount(),
-			BIndex: 0,
+			BIndex:  0,
 			BLength: 0,
 		}
 		return append(pairs, pair)
@@ -54,30 +54,30 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 	halfDelta := (1 - normSim) / 2
 	sf := SimilarityFactors{
 		MaxRareOccurrences: maxRareOccurrences,
-		ExactRare: 1,
-		NormalizedRare: normSim,
-		ExactNonRare: 1 - halfDelta,
-		NormalizedNonRare: MaxFloat32(0, normSim - halfDelta),
+		ExactRare:          1,
+		NormalizedRare:     normSim,
+		ExactNonRare:       1 - halfDelta,
+		NormalizedNonRare:  MaxFloat32(0, normSim-halfDelta),
 	}
 	if !config.AlignNormalizedLines {
 		sf.NormalizedRare = 0
 		sf.NormalizedNonRare = 0
 	}
 	if config.AlignRareLines {
-		sf.ExactRare = 0
 		sf.ExactNonRare = 0
+		sf.NormalizedNonRare = 0
 	}
 
 	lcsData := PerformLCS(middleRangePair, config, sf)
 
 	if false {
-		if mase != nil  {
+		if mase != nil {
 			pairs = append(pairs, mase.sharedPrefixPairs...)
 		}
 		if lcsData != nil {
 			pairs = append(pairs, lcsData.lcsPairs...)
 		}
-		if mase != nil  {
+		if mase != nil {
 			pairs = append(pairs, mase.sharedSuffixPairs...)
 		}
 		SortBlockPairsByAIndex(pairs)
@@ -87,20 +87,18 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 	// TODO Phase 3: Small edit detection (nearly match gap in A with corresponding
 	// gap in B)
 
-	var middleBlockPairs []*BlockPair
-	if mase != nil  {
-		middleBlockPairs = append(middleBlockPairs, mase.sharedSuffixPairs...)
+	var middleBlockPairs BlockPairs
+	if lcsData != nil {
+		middleBlockPairs = append(middleBlockPairs, lcsData.lcsPairs...)
 	}
 	middleBlockPairs = PerformSmallEditDetectionInGaps(middleRangePair, middleBlockPairs, config)
 
 	if false {
-		if mase != nil  {
+		if mase != nil {
 			pairs = append(pairs, mase.sharedPrefixPairs...)
 		}
-		if lcsData != nil {
-			pairs = append(pairs, lcsData.lcsPairs...)
-		}
-		if mase != nil  {
+		pairs = append(pairs, middleBlockPairs...)
+		if mase != nil {
 			pairs = append(pairs, mase.sharedSuffixPairs...)
 		}
 		SortBlockPairsByAIndex(pairs)
@@ -109,16 +107,28 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 
 	// TODO Phase 4: move detection (match a gap in A with some gap(s) in B)
 
-	middleBlockPairs = PerformMoveDetectionInGaps(middleRangePair, middleBlockPairs, config)
+	numMatchedLines, _ := middleBlockPairs.CountLinesInPairs()
+	passes := 0
+	for {
+		passes++
+		var multipleCandidates bool
+		middleBlockPairs, multipleCandidates = PerformMoveDetectionInGaps(middleRangePair, middleBlockPairs, config, sf)
+		newNumMatchedLines, _ := middleBlockPairs.CountLinesInPairs()
+		glog.Infof("Found %d moved lines on pass %d", newNumMatchedLines-numMatchedLines, passes)
+		numMatchedLines = newNumMatchedLines
+		if !multipleCandidates {
+			glog.Infof("Finished looking for move candidates on pass %d", passes)
+			break
+		}
+		glog.Info("There were multiple candidates for some gaps, repeating process")
+	}
 
 	if false {
-		if mase != nil  {
+		if mase != nil {
 			pairs = append(pairs, mase.sharedPrefixPairs...)
 		}
-		if lcsData != nil {
-			pairs = append(pairs, lcsData.lcsPairs...)
-		}
-		if mase != nil  {
+		pairs = append(pairs, middleBlockPairs...)
+		if mase != nil {
 			pairs = append(pairs, mase.sharedSuffixPairs...)
 		}
 		SortBlockPairsByAIndex(pairs)
@@ -126,11 +136,8 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 	}
 
 	// TODO Phase 5: copy detection (match a gap in B with similar size region in B)
-	
 
-
-
-//	rootDiffer.BaseRangesAreNotEmpty()
+	//	rootDiffer.BaseRangesAreNotEmpty()
 
 	//
 	//
@@ -141,10 +148,14 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 	//	return p.baseRangePair.MeasureCommonEnds(onlyExactMatches, maxRareOccurrences)
 	//}
 	//
-
-
-
-
-
-	return nil
+	pairs = nil
+	if mase != nil {
+		pairs = append(pairs, mase.sharedPrefixPairs...)
+	}
+	pairs = append(pairs, middleBlockPairs...)
+	if mase != nil {
+		pairs = append(pairs, mase.sharedSuffixPairs...)
+	}
+	SortBlockPairsByAIndex(pairs)
+	return pairs
 }

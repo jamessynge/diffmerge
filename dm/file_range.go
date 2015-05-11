@@ -1,6 +1,8 @@
 package dm
 
 import (
+	"fmt"
+
 	"github.com/golang/glog"
 )
 
@@ -81,9 +83,16 @@ func CreateFileRange(file *File, start, length int) FileRange {
 	return file.MakeSubRange(start, length)
 }
 
-func (p *fileRange) Length() int { return p.length }
-func (p *fileRange) IsEmpty() bool { return p == nil || p.Length() == 0 }
-func (p *fileRange) FirstIndex() int { return p.start }
+func (p *fileRange) String() string {
+	if p == nil {
+		return "fileRange{nil}"
+	}
+	return fmt.Sprintf("fileRange{lines [%d, %d) of %s}", p.start, p.BeyondIndex(), p.file.BriefDebugString())
+}
+
+func (p *fileRange) Length() int      { return p.length }
+func (p *fileRange) IsEmpty() bool    { return p == nil || p.Length() == 0 }
+func (p *fileRange) FirstIndex() int  { return p.start }
 func (p *fileRange) BeyondIndex() int { return p.start + p.length }
 
 func (p *fileRange) LinePosAtOffset(offsetInRange int) LinePos {

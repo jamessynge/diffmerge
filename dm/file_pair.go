@@ -1,7 +1,7 @@
 package dm
 
 import (
-"fmt"
+	"fmt"
 	"github.com/golang/glog"
 )
 
@@ -13,6 +13,8 @@ type FilePair interface {
 
 	FullFileRangePair() FileRangePair
 	MakeSubRangePair(aIndex, aLength, bIndex, bLength int) FileRangePair
+
+	MakeFileRangePair(aRange, bRange FileRange) FileRangePair
 
 	ALength() int
 	BLength() int
@@ -34,8 +36,8 @@ type filePair struct {
 
 func MakeFilePair(aFile, bFile *File) FilePair {
 	return &filePair{
-		aFile: aFile,
-		bFile: bFile,
+		aFile:          aFile,
+		bFile:          bFile,
 		fileRangePairs: make(map[FourIndices]FileRangePair),
 	}
 }
@@ -46,7 +48,7 @@ func (p *filePair) FullFileRangePair() FileRangePair {
 
 func (p *filePair) MakeSubRangePair(aIndex, aLength, bIndex, bLength int) FileRangePair {
 	glog.V(1).Infof("filePair.MakeSubRangePair AIndices: [%d, +%d),  BIndices: [%d, +%d)",
-		 aIndex, aLength, bIndex, bLength)
+		aIndex, aLength, bIndex, bLength)
 	key := FourIndices{aIndex, aLength, bIndex, bLength}
 	if frp, ok := p.fileRangePairs[key]; ok {
 		return frp
@@ -54,11 +56,39 @@ func (p *filePair) MakeSubRangePair(aIndex, aLength, bIndex, bLength int) FileRa
 	aRange := p.aFile.MakeSubRange(aIndex, aLength)
 	bRange := p.bFile.MakeSubRange(bIndex, bLength)
 	frp := &frpImpl{
-		filePair:  p,
-		aRange: aRange,
-		bRange: bRange,
-		aLength: aLength,
-		bLength: bLength,
+		filePair: p,
+		aRange:   aRange,
+		bRange:   bRange,
+		aLength:  aLength,
+		bLength:  bLength,
+	}
+	return frp
+}
+
+func (p *filePair) MakeFileRangePair(aRange, bRange FileRange) FileRangePair {
+	glog.V(1).Infof("filePair.MakeFileRangePair aRange: %s   bRange: %s", aRange, bRange)
+	if p.aFile != aRange.File() {
+		glog.Fatalf("aRange is for the wrong file!\nExpected: %s\n  Actual: %s",
+			p.aFile.BriefDebugString(),
+			aRange.File().BriefDebugString())
+	}
+	if p.bFile != bRange.File() {
+		glog.Fatalf("bRange is for the wrong file!\nExpected: %s\n  Actual: %s",
+			p.bFile.BriefDebugString(),
+			bRange.File().BriefDebugString())
+	}
+	aIndex, aLength := aRange.FirstIndex(), aRange.Length()
+	bIndex, bLength := bRange.FirstIndex(), bRange.Length()
+	key := FourIndices{aIndex, aLength, bIndex, bLength}
+	if frp, ok := p.fileRangePairs[key]; ok {
+		return frp
+	}
+	frp := &frpImpl{
+		filePair: p,
+		aRange:   aRange,
+		bRange:   bRange,
+		aLength:  aLength,
+		bLength:  bLength,
 	}
 	return frp
 }
@@ -82,7 +112,7 @@ func (p *filePair) BriefDebugString() string {
 
 // Not comparing actual content, just hashes and lengths.
 func (p *filePair) CompareFileLines(
-			aIndex, bIndex int, maxRareOccurrences uint8) (equal, approx, rare bool) {
+	aIndex, bIndex int, maxRareOccurrences uint8) (equal, approx, rare bool) {
 	aLP := &p.aFile.Lines[aIndex]
 	bLP := &p.bFile.Lines[bIndex]
 	if aLP.NormalizedHash != bLP.NormalizedHash {
@@ -113,17 +143,18 @@ func (p *filePair) CanFillGapWithMatches(pair1, pair2 *BlockPair) (exactlyEqual,
 	aHi, bHi := pair2.AIndex, pair2.BIndex
 	aLength := aHi - aLo
 	bLength := bHi - bLo
-	if aLength <= 0 || aLength != bLength { return }
+	if aLength <= 0 || aLength != bLength {
+		return
+	}
 	allExact := true
 	for aLo < aHi && bLo < bHi {
 		lineEqual, lineApprox, _ := p.CompareFileLines(aLo, bLo, 0)
-		if !lineApprox { return }
+		if !lineApprox {
+			return
+		}
 		allExact = allExact && lineEqual
 		aLo++
 		bLo++
 	}
 	return allExact, !allExact
 }
-
-
-

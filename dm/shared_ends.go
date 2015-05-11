@@ -20,11 +20,11 @@ type SharedEndsData struct {
 	// The FileRangePair which was measured to produce this.
 	Source FileRangePair
 
-	NonRarePrefixLength, NonRareSuffixLength    int
-	RarePrefixLength, RareSuffixLength          int
+	NonRarePrefixLength, NonRareSuffixLength int
+	RarePrefixLength, RareSuffixLength       int
 }
 
-func (p *SharedEndsData) PrefixAndSuffixOverlap(rareEndsOnly bool)  bool {
+func (p *SharedEndsData) PrefixAndSuffixOverlap(rareEndsOnly bool) bool {
 	limit, combinedLength := MinInt(p.Source.ALength(), p.Source.BLength()), 0
 	if rareEndsOnly {
 		combinedLength = p.RarePrefixLength + p.RareSuffixLength
@@ -48,7 +48,7 @@ func (p *SharedEndsData) GetPrefixAndSuffixLengths(rareEndsOnly bool) (prefixLen
 		cfg := spew.Config
 		cfg.MaxDepth = 2
 		glog.Fatal("GetPrefixAndSuffixLengths: prefix and suffix overlap;\n",
-							 cfg.Sdump(p))
+			cfg.Sdump(p))
 	}
 	if rareEndsOnly {
 		return p.RarePrefixLength, p.RareSuffixLength

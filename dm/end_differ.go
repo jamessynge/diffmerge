@@ -51,11 +51,11 @@ func FindMiddleAndSharedEnds(frp FileRangePair, config DifferencerConfig) *middl
 		rareEndsOnly, onlyExactMatches, maxRareOccurrences)
 
 	return &middleAndSharedEnds{
-		baseRangePair: frp,
-		sharedEndsData: sharedEndsData,
+		baseRangePair:     frp,
+		sharedEndsData:    sharedEndsData,
 		sharedPrefixPairs: prefixPairs,
 		sharedSuffixPairs: suffixPairs,
-		middleRangePair: middleFRP,
+		middleRangePair:   middleFRP,
 	}
 }
 
