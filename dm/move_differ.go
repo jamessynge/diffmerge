@@ -108,7 +108,7 @@ func (v MoveCandidate2s) SetScores() {
 func PerformMoveDetectionInGaps(
 	frp FileRangePair, blockPairs BlockPairs, config DifferencerConfig,
 	sf SimilarityFactors) (
-	outputBlockPairs BlockPairs, multipleCandidates bool) {
+	outputBlockPairs BlockPairs) {
 	defer glog.Flush()
 
 	glog.Infof("PerformMoveDetectionInGaps: %d blockPairs input", len(blockPairs))
@@ -118,7 +118,7 @@ func PerformMoveDetectionInGaps(
 	glog.Infof("len(aGapRanges) == %d", len(aGapRanges))
 	glog.Infof("len(bGapRanges) == %d", len(bGapRanges))
 
-	multipleCandidates = false
+//	multipleCandidates = false
 	var allMoveCandidates MoveCandidate2s
 	for i, aGapFR := range aGapRanges {
 		glog.Infof("Comparing gap %d in A to all gaps in B: aGapFR %s", i, aGapFR)

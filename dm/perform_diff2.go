@@ -108,20 +108,9 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 	// TODO Phase 4: move detection (match a gap in A with some gap(s) in B)
 
 	numMatchedLines, _ := middleBlockPairs.CountLinesInPairs()
-	passes := 0
-	for {
-		passes++
-		var multipleCandidates bool
-		middleBlockPairs, multipleCandidates = PerformMoveDetectionInGaps(middleRangePair, middleBlockPairs, config, sf)
-		newNumMatchedLines, _ := middleBlockPairs.CountLinesInPairs()
-		glog.Infof("Found %d moved lines on pass %d", newNumMatchedLines-numMatchedLines, passes)
-		numMatchedLines = newNumMatchedLines
-		if !multipleCandidates {
-			glog.Infof("Finished looking for move candidates on pass %d", passes)
-			break
-		}
-		glog.Info("There were multiple candidates for some gaps, repeating process")
-	}
+	middleBlockPairs = PerformMoveDetectionInGaps(middleRangePair, middleBlockPairs, config, sf)
+	newNumMatchedLines, _ := middleBlockPairs.CountLinesInPairs()
+	glog.Infof("Found %d moved or copied lines", newNumMatchedLines-numMatchedLines)
 
 	if false {
 		if mase != nil {
@@ -135,7 +124,7 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 		return
 	}
 
-	// TODO Phase 5: copy detection (match a gap in B with similar size region in B)
+	// TODO Phase 5: copy detection (match a gap in B with similar size region anywhere in file A)
 
 	//	rootDiffer.BaseRangesAreNotEmpty()
 
