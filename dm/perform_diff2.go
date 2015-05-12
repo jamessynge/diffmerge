@@ -105,7 +105,7 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 		return
 	}
 
-	// TODO Phase 4: move detection (match a gap in A with some gap(s) in B)
+	// Phase 4: move detection (match a gap in A with some gap(s) in B)
 
 	numMatchedLines, _ := middleBlockPairs.CountLinesInPairs()
 	middleBlockPairs = PerformMoveDetectionInGaps(middleRangePair, middleBlockPairs, config, sf)
@@ -137,6 +137,20 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 	//	return p.baseRangePair.MeasureCommonEnds(onlyExactMatches, maxRareOccurrences)
 	//}
 	//
+
+	// Phase 6: common & normalized matches (grow unique line matches forward, then backwards).
+
+
+
+
+
+
+
+
+
+
+
+
 	pairs = nil
 	if mase != nil {
 		pairs = append(pairs, mase.sharedPrefixPairs...)
@@ -148,3 +162,32 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 	SortBlockPairsByAIndex(pairs)
 	return pairs
 }
+
+// Extend matches forward, then backward. A line in A may be matched up with
+// multiple lines in B, but only if the BlockPairs of those B lines have
+// different MoveIds.
+
+func MatchesExtender(filePair FilePair, blockPairs BlockPairs) {
+	matchedBIndices := MakeIntervalSet()
+	insertBIndices := func(pairs BlockPairs) {
+		for _, pair := range pairs {
+			matchedBIndices.InsertInterval(pair.BIndex, pair.BBeyond())
+		}
+	}
+	containsAnyBIndices := func(pairs BlockPairs) bool {
+		for _, pair := range pairs {
+			if matchedBIndices.ContainsSome(pair.BIndex, pair.BBeyond()) {
+				return true
+			}
+		}
+		return false
+	}
+
+
+
+}
+
+
+
+
+

@@ -13,6 +13,7 @@ type IntervalSet interface {
 	InsertInterval(begin, beyond int)
 	ContainsSome(begin, beyond int) bool
 	ContainsAll(begin, beyond int) bool
+	Contains(position int) bool
 }
 
 func MakeIntervalSet() IntervalSet {
@@ -120,4 +121,10 @@ func (p *intervalSet) ContainsAll(begin, beyond int) bool {
 	}
 	ip := &p.s[loIndex]
 	return ip.Index1 <= begin && beyond <= ip.Index2
+}
+
+func (p *intervalSet) Contains(position int) bool {
+	index := p.searchForBegin(position)
+	if index >= len(p.s) { return false }
+	return p.s[index].Index1 <= position && position < p.s[index].Index2
 }
