@@ -168,7 +168,21 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 // different MoveIds.
 
 func MatchesExtender(filePair FilePair, blockPairs BlockPairs) {
-	matchedBIndices := MakeIntervalSet()
+	allMatchedAIndices := AIndexBlockPairsToIntervalSet(blockPairs,	SelectAllBlockPairs)
+	
+	
+func AIndexBlockPairsToIntervalSet(
+	blockPairs BlockPairs, selector func(pair *BlockPair) bool) IntervalSet {
+	return BlockPairsToIntervalSet(blockPairs, MakeGetAInterval(selector))
+}
+
+func BIndexBlockPairsToIntervalSet(
+	blockPairs BlockPairs, selector func(pair *BlockPair) bool) IntervalSet {
+	return BlockPairsToIntervalSet(blockPairs, MakeGetBInterval(selector))
+}
+	
+	
+	MakeIntervalSet()
 	insertBIndices := func(pairs BlockPairs) {
 		for _, pair := range pairs {
 			matchedBIndices.InsertInterval(pair.BIndex, pair.BBeyond())

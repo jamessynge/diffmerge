@@ -167,6 +167,56 @@ func MakeBlockPairAdjacencies(blockPairs BlockPairs) (
 	return
 }
 
+////////////////////////////////////////////////////////////////////////////////
+
+type SelectBlockPairFn func(pair *BlockPair) bool
+type GetIntervalFn func(pair *BlockPair) (begin, beyond int)
+
+func SelectAllBlockPairs(pair *BlockPair) bool { return true }
+
+func MakeGetAInterval(selector SelectBlockPairFn) GetIntervalFn {
+	return func(pair *BlockPair) (begin, beyond int) {
+		if pair != nil && selector(pair) {
+			begin, beyond = pair.AIndex, pair.ABeyond()
+		}
+		return
+	}
+}
+
+func MakeGetBInterval(selector SelectBlockPairFn) GetIntervalFn {
+	return func(pair *BlockPair) (begin, beyond int) {
+		if pair != nil && selector(pair) {
+			begin, beyond = pair.BIndex, pair.BBeyond()
+		}
+		return
+	}
+}
+
+func BlockPairsToIntervalSet(
+	blockPairs BlockPairs, getInterval GetIntervalFn) IntervalSet {
+	set := MakeIntervalSet()
+	for _, pair := range blockPairs {
+		begin, beyond := getInterval(pair)
+		if begin < beyond {
+			set.InsertInterval(begin, beyond)
+		}
+	}
+	return set
+}
+
+func AIndexBlockPairsToIntervalSet(
+	blockPairs BlockPairs, selector func(pair *BlockPair) bool) IntervalSet {
+	return BlockPairsToIntervalSet(blockPairs, MakeGetAInterval(selector))
+}
+
+func BIndexBlockPairsToIntervalSet(
+	blockPairs BlockPairs, selector func(pair *BlockPair) bool) IntervalSet {
+	return BlockPairsToIntervalSet(blockPairs, MakeGetBInterval(selector))
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+
 // Sort by AIndex or BIndex before calling CombineBlockPairs.
 func CombineBlockPairs(sortedInput []*BlockPair) (output []*BlockPair) {
 	if glog.V(1) {
