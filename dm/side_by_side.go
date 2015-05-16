@@ -49,6 +49,8 @@ type SideBySideConfig struct {
 	// Number of lines of context (exact match lines) to output adjacent to
 	// changes. If 0, then all exact match lines are output.
 	ContextLines int
+
+	ZeroBasedLineNumbers bool
 }
 
 var DefaultSideBySideConfig = SideBySideConfig{
@@ -87,6 +89,7 @@ type sideBySideState struct {
 	w          io.Writer
 
 	lineFormat string
+	lineNumberOffset int
 }
 
 func (state *sideBySideState) initialize() {
@@ -94,8 +97,16 @@ func (state *sideBySideState) initialize() {
 	availableOutputColumns := state.cfg.DisplayColumns - 3
 
 	if state.cfg.DisplayLineNumbers {
-		state.aDigitColumns = DigitCount(MaxInt(2, state.aFile.LineCount()))
-		state.bDigitColumns = DigitCount(MaxInt(2, state.bFile.LineCount()))
+		aMax, bMax := state.aFile.LineCount(), state.bFile.LineCount()
+		if state.cfg.ZeroBasedLineNumbers {
+			aMax = MaxInt(0, aMax - 1)
+			bMax = MaxInt(0, bMax - 1)
+			state.lineNumberOffset = 0
+		} else {
+			state.lineNumberOffset = 1
+		}
+		state.aDigitColumns = DigitCount(MaxInt(0, aMax))
+		state.bDigitColumns = DigitCount(MaxInt(0, bMax))
 		availableOutputColumns -= (state.aDigitColumns + state.bDigitColumns + 2)
 	} else {
 		state.aDigitColumns = 0
@@ -237,6 +248,8 @@ func (state *sideBySideState) outputABLines(aIndex, bIndex int, code string) {
 	glog.V(2).Infof("outputABLines: %d, %d, %s;  #aBufs %d; #bBufs %d; limit %d",
 		aIndex, bIndex, code, len(aBufs), len(bBufs), limit)
 
+
+
 	for n := 0; n < limit; n++ {
 		aBuf := selectOutputBuf(aBufs, n, state.aOutputColumns)
 		bBuf := selectOutputBuf(bBufs, n, state.bOutputColumns)
@@ -244,10 +257,10 @@ func (state *sideBySideState) outputABLines(aIndex, bIndex int, code string) {
 			var aLineNo, bLineNo string
 			if n == 0 {
 				if aIndex >= 0 {
-					aLineNo = fmt.Sprintf("%d", aIndex+1)
+					aLineNo = fmt.Sprintf("%d", aIndex+state.lineNumberOffset)
 				}
 				if bIndex >= 0 {
-					bLineNo = fmt.Sprintf("%d", bIndex+1)
+					bLineNo = fmt.Sprintf("%d", bIndex+state.lineNumberOffset)
 				}
 			} else {
 				if aIndex >= 0 {
@@ -333,33 +346,19 @@ func FormatSideBySide(aFile, bFile *File, pairs []*BlockPair, aIsPrimary bool,
 	return
 }
 
+func FormatSideBySideToString(aFile, bFile *File, pairs []*BlockPair,
+															aIsPrimary bool, config SideBySideConfig) string {
+	var buf bytes.Buffer
+	FormatSideBySide(aFile, bFile, pairs, aIsPrimary, &buf, config)
+	return buf.String()
+}
+
 func glogSideBySide(aFile, bFile *File, pairs []*BlockPair, aIsPrimary bool,
 	optionalConfig *SideBySideConfig) {
-	pairs = append([]*BlockPair(nil), pairs...)
-	if aIsPrimary {
-		SortBlockPairsByAIndex(pairs)
-	} else {
-		SortBlockPairsByBIndex(pairs)
+	if optionalConfig == nil {
+		optionalConfig = &DefaultSideBySideConfig
 	}
-
-	var buf bytes.Buffer
-
-	state := &sideBySideState{
-		cfg:   DefaultSideBySideConfig,
-		aFile: aFile,
-		bFile: bFile,
-		pairs: pairs,
-		w:     &buf,
-	}
-
-	if optionalConfig != nil {
-		state.cfg = *optionalConfig
-	}
-
-	state.initialize()
-	state.outputBlockPairs()
-
 	// Maybe split if glog can't take too large a string?
-
-	glog.InfoDepth(1, "\n\n", buf.String(), "\n\n")
+	s := FormatSideBySideToString(aFile, bFile, pairs, aIsPrimary, *optionalConfig)
+	glog.InfoDepth(1, "\n\n", s, "\n\n")
 }

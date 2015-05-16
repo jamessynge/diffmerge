@@ -70,18 +70,19 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 
 	lcsData := PerformLCS(middleRangePair, config, sf)
 
-	if false {
+	if glog.V(1) {
+		glog.Info("PerformLCS produced the following")
+		var debugPairs BlockPairs
 		if mase != nil {
-			pairs = append(pairs, mase.sharedPrefixPairs...)
+			debugPairs = append(debugPairs, mase.sharedPrefixPairs...)
 		}
 		if lcsData != nil {
-			pairs = append(pairs, lcsData.lcsPairs...)
+			debugPairs = append(debugPairs, lcsData.lcsPairs...)
 		}
 		if mase != nil {
-			pairs = append(pairs, mase.sharedSuffixPairs...)
+			debugPairs = append(debugPairs, mase.sharedSuffixPairs...)
 		}
-		SortBlockPairsByAIndex(pairs)
-		return
+		glogSideBySide(aFile, bFile, debugPairs, false, nil)
 	}
 
 	// TODO Phase 3: Small edit detection (nearly match gap in A with corresponding
@@ -91,38 +92,49 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 	if lcsData != nil {
 		middleBlockPairs = append(middleBlockPairs, lcsData.lcsPairs...)
 	}
-	middleBlockPairs = PerformSmallEditDetectionInGaps(middleRangePair, middleBlockPairs, config)
+	// NOTE: Not sure I like this idea, as we'll go from having only matches
+	// to having matches and non-matches in middleBlockPairs.
+	//   	middleBlockPairs = PerformSmallEditDetectionInGaps(middleRangePair, middleBlockPairs, config)
 
-	if false {
-		if mase != nil {
-			pairs = append(pairs, mase.sharedPrefixPairs...)
-		}
-		pairs = append(pairs, middleBlockPairs...)
-		if mase != nil {
-			pairs = append(pairs, mase.sharedSuffixPairs...)
-		}
-		SortBlockPairsByAIndex(pairs)
-		return
-	}
-
-	// Phase 4: move detection (match a gap in A with some gap(s) in B)
+	// Phase 4a: move detection (match a gap in A with some gap(s) in B)
 
 	numMatchedLines, _ := middleBlockPairs.CountLinesInPairs()
 	middleBlockPairs = PerformMoveDetectionInGaps(middleRangePair, middleBlockPairs, config, sf)
 	newNumMatchedLines, _ := middleBlockPairs.CountLinesInPairs()
 	glog.Infof("Found %d moved or copied lines", newNumMatchedLines-numMatchedLines)
 
-	if false {
-		if mase != nil {
-			pairs = append(pairs, mase.sharedPrefixPairs...)
-		}
-		pairs = append(pairs, middleBlockPairs...)
-		if mase != nil {
-			pairs = append(pairs, mase.sharedSuffixPairs...)
-		}
-		SortBlockPairsByAIndex(pairs)
-		return
+	var allMatches BlockPairs
+	if mase != nil {
+		allMatches = append(allMatches, mase.sharedPrefixPairs...)
 	}
+	allMatches = append(allMatches, middleBlockPairs...)
+	if mase != nil {
+		allMatches = append(allMatches, mase.sharedSuffixPairs...)
+	}
+
+	if glog.V(1) {
+		glog.Info("PerformMoveDetectionInGaps produced the following")
+		glogSideBySide(aFile, bFile, allMatches, false, nil)
+	}
+
+	// Phase 4b: Extend matches forward, then backwards. Do before copy or edit
+	// detection.
+
+	allMatches = ExtendMatchesForward(filePair, allMatches)
+	allMatches = ExtendMatchesBackward(filePair, allMatches)
+
+
+	// TODO Split mixed matches.
+	
+	
+	// Combine matches.
+	SortBlockPairsByBIndex(allMatches)
+	allMatches = CombineBlockPairs(allMatches)
+
+
+
+
+	return allMatches
 
 	// TODO Phase 5: copy detection (match a gap in B with similar size region anywhere in file A)
 
@@ -140,67 +152,140 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 
 	// Phase 6: common & normalized matches (grow unique line matches forward, then backwards).
 
+}
 
+func ExtendMatchesForward(filePair FilePair, inputPairs BlockPairs) (outputPairs BlockPairs) {
+	matchedALines := AIndexBlockPairsToIntervalSet(
+		inputPairs, SelectAllBlockPairs)
+	matchedBLines := AIndexBlockPairsToIntervalSet(
+		inputPairs, SelectAllBlockPairs)
 
+	SortBlockPairsByBIndex(inputPairs)
 
-
-
-
-
-
-
-
-
-	pairs = nil
-	if mase != nil {
-		pairs = append(pairs, mase.sharedPrefixPairs...)
+	if glog.V(1) {
+		glog.Info("ExtendMatchesForward input:")
+		glogSideBySide(filePair.AFile(), filePair.BFile(), inputPairs, false, nil)
 	}
-	pairs = append(pairs, middleBlockPairs...)
-	if mase != nil {
-		pairs = append(pairs, mase.sharedSuffixPairs...)
-	}
-	SortBlockPairsByAIndex(pairs)
-	return pairs
-}
 
-// Extend matches forward, then backward. A line in A may be matched up with
-// multiple lines in B, but only if the BlockPairs of those B lines have
-// different MoveIds.
-
-func MatchesExtender(filePair FilePair, blockPairs BlockPairs) {
-	allMatchedAIndices := AIndexBlockPairsToIntervalSet(blockPairs,	SelectAllBlockPairs)
-	
-	
-func AIndexBlockPairsToIntervalSet(
-	blockPairs BlockPairs, selector func(pair *BlockPair) bool) IntervalSet {
-	return BlockPairsToIntervalSet(blockPairs, MakeGetAInterval(selector))
-}
-
-func BIndexBlockPairsToIntervalSet(
-	blockPairs BlockPairs, selector func(pair *BlockPair) bool) IntervalSet {
-	return BlockPairsToIntervalSet(blockPairs, MakeGetBInterval(selector))
-}
-	
-	
-	MakeIntervalSet()
-	insertBIndices := func(pairs BlockPairs) {
-		for _, pair := range pairs {
-			matchedBIndices.InsertInterval(pair.BIndex, pair.BBeyond())
+	for _, oldPair := range inputPairs {
+		aIndex, bIndex := oldPair.ABeyond(), oldPair.BBeyond()
+		var newPair *BlockPair
+		for {
+			if aIndex >= filePair.ALength() || bIndex >= filePair.BLength() {
+				break
+			}
+			if matchedALines.Contains(aIndex) || matchedBLines.Contains(bIndex) {
+				break
+			}
+			equal, approx, _ := filePair.CompareFileLines(aIndex, bIndex, 0)
+			if !(equal || approx) {
+				break
+			}
+			matchedALines.InsertInterval(aIndex, aIndex+1)
+			matchedBLines.InsertInterval(bIndex, bIndex+1)
+			if newPair != nil && newPair.IsMatch == equal {
+				// Extend newPair.
+				glog.V(1).Info("Extending BlockPair forward")
+				newPair.ALength++
+				newPair.BLength++
+			} else {
+				// Create a new pair.
+				newPair = &BlockPair{
+					AIndex:            aIndex,
+					ALength:           1,
+					BIndex:            bIndex,
+					BLength:           1,
+					IsMatch:           equal,
+					IsNormalizedMatch: !equal,
+				}
+				glog.V(1).Infof("ExtendMatchesForward matching up %d and %d", aIndex, bIndex)
+				outputPairs = append(outputPairs, newPair)
+			}
+			aIndex++
+			bIndex++
 		}
 	}
-	containsAnyBIndices := func(pairs BlockPairs) bool {
-		for _, pair := range pairs {
-			if matchedBIndices.ContainsSome(pair.BIndex, pair.BBeyond()) {
-				return true
+
+	if len(outputPairs) == 0 {
+		glog.V(1).Info("ExtendMatchesForward found no new matches")
+		return inputPairs
+	}
+
+	if glog.V(1) {
+		glog.Info("ExtendMatchesForward generated the following")
+		glogSideBySide(filePair.AFile(), filePair.BFile(), outputPairs, false, nil)
+	}
+
+	outputPairs = append(outputPairs, inputPairs...)
+
+	if glog.V(1) {
+		glog.Info("ExtendMatchesForward produced the following")
+		glogSideBySide(filePair.AFile(), filePair.BFile(), outputPairs, false, nil)
+	}
+
+	return outputPairs
+}
+
+func ExtendMatchesBackward(filePair FilePair, inputPairs BlockPairs) (outputPairs BlockPairs) {
+	matchedALines := AIndexBlockPairsToIntervalSet(
+		inputPairs, SelectAllBlockPairs)
+	matchedBLines := AIndexBlockPairsToIntervalSet(
+		inputPairs, SelectAllBlockPairs)
+
+	SortBlockPairsByBIndex(inputPairs)
+	for _, oldPair := range inputPairs {
+		aIndex, bIndex := oldPair.AIndex, oldPair.BIndex
+		var newPair *BlockPair
+		for {
+			if aIndex <= 0 || bIndex <= 0 { break }
+			aIndex--
+			bIndex--
+			if matchedALines.Contains(aIndex) || matchedBLines.Contains(bIndex) {
+				break
+			}
+			equal, approx, _ := filePair.CompareFileLines(aIndex, bIndex, 0)
+			if !(equal || approx) {
+				break
+			}
+			matchedALines.InsertInterval(aIndex, aIndex+1)
+			matchedBLines.InsertInterval(bIndex, bIndex+1)
+			if newPair != nil && newPair.IsMatch == equal {
+				// Extend newPair.
+				glog.V(1).Info("Extending BlockPair backward")
+				newPair.AIndex--
+				newPair.BIndex--
+				newPair.ALength++
+				newPair.BLength++
+			} else {
+				// Create a new pair.
+				newPair = &BlockPair{
+					AIndex:            aIndex,
+					ALength:           1,
+					BIndex:            bIndex,
+					BLength:           1,
+					IsMatch:           equal,
+					IsNormalizedMatch: !equal,
+				}
+				glog.V(1).Infof("ExtendMatchesBackward matching up %d and %d", aIndex, bIndex)
+				outputPairs = append(outputPairs, newPair)
 			}
 		}
-		return false
 	}
 
+	if len(outputPairs) == 0 {
+		glog.V(1).Info("ExtendMatchesBackward found no new matches")
+		return inputPairs
+	}
 
+	outputPairs = append(outputPairs, inputPairs...)
 
+	if glog.V(1) {
+		glog.Info("ExtendMatchesBackward produced the following")
+		glogSideBySide(filePair.AFile(), filePair.BFile(), outputPairs, false, nil)
+	}
+
+	return outputPairs
 }
-
 
 
 

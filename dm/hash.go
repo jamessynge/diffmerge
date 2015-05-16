@@ -74,21 +74,14 @@ func createLineHasher() LineHasher {
 }
 
 func (p *lineHasher) Compute(line []byte) (fullHash, normalizedHash uint32) {
-	if len(line) > 0 {
-		fullHash = p.hf.Hash(line)
-		line = normalizeLine(line)
-		if len(line) > 0 {
-			normalizedHash = p.hn.Hash(line)
-		}
-	}
-	return
+	return p.Compute2(line, normalizeLine(line))
 }
 func (p *lineHasher) Compute2(line, normalizedLine []byte) (fullHash, normalizedHash uint32) {
 	if len(line) > 0 {
 		fullHash = p.hf.Hash(line)
 	}
 	if len(normalizedLine) > 0 {
-		normalizedHash = p.hn.Hash(line)
+		normalizedHash = p.hn.Hash(normalizedLine)
 	}
 	return
 }

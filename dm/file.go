@@ -86,6 +86,11 @@ func (p *File) GetLineBytes(n int) []byte {
 	return nil
 }
 
+func (p *File) GetUnindentedLineBytes(n int) []byte {
+	line := p.GetLineBytes(n)
+	return removeIndent(line)
+}
+
 func (p *File) GetHashOfLine(n int) uint32 {
 	return p.Lines[n].Hash
 }

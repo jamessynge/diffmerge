@@ -1,0 +1,25 @@
+// Adapted from some C++ code.
+
+bool FeatureController::FeatureEnabled(
+    const ConfigData& config_data, const string& needle_name) const {
+  for (const auto& name : config_data.bad_name()) {
+    if (needle_name == name) {
+      return false;
+    }
+  }
+
+  if (config_data.good_name_size()) {
+    bool found = false;
+    for (const auto& name : config_data.good_name()) {
+      if (needle_name == name) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      return false;
+    }
+  }
+  return true;
+}
+

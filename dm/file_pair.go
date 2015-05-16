@@ -115,6 +115,15 @@ func (p *filePair) CompareFileLines(
 	aIndex, bIndex int, maxRareOccurrences uint8) (equal, approx, rare bool) {
 	aLP := &p.aFile.Lines[aIndex]
 	bLP := &p.bFile.Lines[bIndex]
+	if glog.V(2) {
+		glog.Infof("CompareFileLines(%d, %d, %d) aLP: %v    bLP: %v",
+			aIndex, bIndex, maxRareOccurrences, *aLP, *bLP)
+		defer func() {
+			glog.Infof("CompareFileLines(%d, %d, %d) -> %v, %v, %v\nA: %q\nB: %q",
+				aIndex, bIndex, maxRareOccurrences, equal, approx, rare,
+				p.aFile.GetUnindentedLineBytes(aIndex), p.bFile.GetUnindentedLineBytes(bIndex))
+		}()
+	}
 	if aLP.NormalizedHash != bLP.NormalizedHash {
 		return
 	}

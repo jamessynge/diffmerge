@@ -107,16 +107,18 @@ func (s *SimilarityFactors) SimilarityOfRangeLines(pair FileRangePair, aOffset, 
 
 func WeightedLCSOffsetsOfRangePair(pair FileRangePair, sf SimilarityFactors) (lcsOffsetPairs []IndexPair, score float32) {
 	glog.Infof("WeightedLCSOffsetsOfRangePair sf: %s", spew.Sdump(sf))
-
+	if glog.V(1) {
+		glogFileRangePairSideBySide(pair, nil)
+	}
 	aLength, bLength := pair.ALength(), pair.BLength()
 	if aLength == 0 || bLength == 0 {
 		return
 	}
 	var computeSimilarity func(aOffset, bOffset int) float32
-	if glog.V(1) {
+	if glog.V(2) {
 		computeSimilarity = func(aOffset, bOffset int) float32 {
 			result := sf.SimilarityOfRangeLines(pair, aOffset, bOffset)
-			glog.Infof("Similarity -> %v", result)
+			glog.Infof("Similarity of offsets %d and %d -> %v", aOffset, bOffset, result)
 			return result
 		}
 	} else {

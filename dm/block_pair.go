@@ -65,7 +65,8 @@ func BlockPairsLess(p, o *BlockPair) bool {
 }
 
 func BlockPairsAreSameType(p, o *BlockPair) bool {
-	return p.IsMatch == o.IsMatch && p.IsNormalizedMatch == o.IsNormalizedMatch
+	return (p.IsMatch == o.IsMatch && p.IsNormalizedMatch == o.IsNormalizedMatch &&
+	 	p.IsMove == o.IsMove && p.MoveId == o.MoveId)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -262,3 +263,81 @@ func CombineBlockPairs(sortedInput []*BlockPair) (output []*BlockPair) {
 
 	return output
 }
+
+
+
+/*
+// Splits a match BlockPair if it is of mixed type (i.e. some lines are
+// exact matches, and some are only normalized matches), and combines adjacent
+// BlockPairs if they are of the the same type.
+// Sort by AIndex or BIndex before calling NormalizeBlockPairs.
+func NormalizeBlockPairs(sortedInput BlockPairs, matchedNormalizedLines bool) (output BlockPairs) {
+	if glog.V(1) {
+		glog.Info("NormalizeBlockPairs entry")
+		for n, pair := range sortedInput {
+			glog.Infof("NormalizeBlockPairs sortedInput[%d] = %v", n, pair)
+		}
+	}
+
+	var prevPair *BlockPair
+	for _, thisPair := range sortedInput {
+		if thisPair.IsNormalizedMatch && (matchedNormalizedLines ||  
+
+		if matchedNormalizedLines
+
+
+	return (p.IsMatch == o.IsMatch && p.IsNormalizedMatch == o.IsNormalizedMatch
+
+
+
+
+
+
+
+
+
+
+
+
+
+	output = append(output, sortedInput...)
+	// For each pair of consecutive BlockPairs, if they can be combined,
+	// combine them into the first of them.
+	u, v, limit, removed := 0, 1, len(output), 0
+	for v < limit {
+		j, k := output[u], output[v]
+
+		glog.Infof("CombineBlockPairs output[u=%d] = %v", u, j)
+		glog.Infof("CombineBlockPairs output[v=%d] = %v", v, k)
+
+		if BlockPairsAreSameType(j, k) && BlockPairsAreNeighbors(j, k) && !IsSentinal(j) && !IsSentinal(k) {
+			glog.Infof("Combining BlockPairs:\n[%d]: %v\n[%d]: %v", u, *j, v, *k)
+			j.ALength += k.ALength
+			j.BLength += k.BLength
+			output[v] = nil
+			removed++
+		} else {
+			// BlockPairs can't be combined.
+			output[u+1] = k
+			u++
+		}
+		v++
+	}
+	glog.Infof("Removed %d (= %d) BlockPairs", v-u-1, removed)
+
+	output = output[0 : u+1]
+
+	if glog.V(1) {
+		glog.Info("CombineBlockPairs exit")
+		for n, pair := range output {
+			glog.Infof("CombineBlockPairs output[%d] = %v", n, pair)
+		}
+	}
+
+	return output
+}
+
+*/
+
+
+

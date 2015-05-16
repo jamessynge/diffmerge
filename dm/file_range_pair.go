@@ -122,13 +122,17 @@ func (p *frpImpl) ToRangeOffsets(aIndex, bIndex int) (aOffset, bOffset int) {
 
 // Not comparing actual content, just hashes and lengths.
 func (p *frpImpl) CompareLines(aOffset, bOffset int, maxRareOccurrences uint8) (equal, approx, rare bool) {
-	if glog.V(2) {
+	aIndex, bIndex := p.ToFileIndices(aOffset, bOffset)
+	if false && glog.V(2) {
 		defer func() {
-			glog.V(2).Infof("frpImpl.CompareLines(%d, %d, %d) -> %v, %v, %v",
-				aOffset, bOffset, maxRareOccurrences, equal, approx, rare)
+			var lineBytes []byte
+			if approx {
+				lineBytes = p.aRange.File().GetLineBytes(aIndex)
+			}
+			glog.Infof("frpImpl.CompareLines(%d, %d, %d) -> %v, %v, %v    %q",
+				aOffset, bOffset, maxRareOccurrences, equal, approx, rare, lineBytes)
 		}()
 	}
-	aIndex, bIndex := p.ToFileIndices(aOffset, bOffset)
 	return p.filePair.CompareFileLines(aIndex, bIndex, maxRareOccurrences)
 }
 
@@ -340,6 +344,32 @@ func MatchingRangePairOffsetsToBlockPairs(
 	glog.Infof("MatchingOffsetsToBlockPairs converted %d matching lines to %d BlockPairs",
 		len(matchingOffsets), len(blockPairs))
 	return
+}
+
+func glogFileRangePairSideBySide(frp FileRangePair, optionalConfig *SideBySideConfig) {
+	aRange, bRange := frp.ARange(), frp.BRange()
+	mismatch := &BlockPair{
+		AIndex: aRange.FirstIndex(),
+		ALength: aRange.Length(),
+		BIndex: bRange.FirstIndex(),
+		BLength: bRange.Length(),
+	}
+	pairs := BlockPairs{mismatch}
+
+	if optionalConfig == nil {
+		optionalConfig = &SideBySideConfig{
+			DisplayColumns:     128,
+			DisplayLineNumbers: true,
+			WrapLongLines:      true,
+			SpacesPerTab:       2,
+			ContextLines:       0,
+			ZeroBasedLineNumbers: true,
+		}
+	}
+
+	// Maybe split if glog can't take too large a string?
+	s := FormatSideBySideToString(aRange.File(), bRange.File(), pairs, false, *optionalConfig)
+	glog.InfoDepth(1, "\n\n", s, "\n\n")
 }
 
 /*
