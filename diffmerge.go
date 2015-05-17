@@ -92,9 +92,6 @@ var (
 
 	pSideBySideFlag = flag.Bool(
 		"side-by-side", true, "For diff of two files, display results side-by-side.")
-
-	pOutputColumns = flag.Int(
-		"output-columns", 80, "How many columns does the output device have?")
 )
 
 func ReadFileOrDie(name string) *dm.File {
@@ -155,7 +152,6 @@ func main() {
 
 		if *pSideBySideFlag {
 			sxsCfg := dm.DefaultSideBySideConfig
-			sxsCfg.DisplayColumns = *pOutputColumns
 			dm.FormatSideBySide(fromFile, toFile, pairs, false, os.Stdout, sxsCfg)
 		} else {
 			dm.FormatInterleaved(pairs, false, fromFile, toFile, os.Stdout, true)

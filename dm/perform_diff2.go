@@ -131,10 +131,9 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 	SortBlockPairsByBIndex(allMatches)
 	allMatches = CombineBlockPairs(allMatches)
 
+	allPairs := FillRemainingBGapsWithMismatches(filePair, allMatches)
 
-
-
-	return allMatches
+	return allPairs
 
 	// TODO Phase 5: copy detection (match a gap in B with similar size region anywhere in file A)
 
@@ -157,7 +156,7 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 func ExtendMatchesForward(filePair FilePair, inputPairs BlockPairs) (outputPairs BlockPairs) {
 	matchedALines := AIndexBlockPairsToIntervalSet(
 		inputPairs, SelectAllBlockPairs)
-	matchedBLines := AIndexBlockPairsToIntervalSet(
+	matchedBLines := BIndexBlockPairsToIntervalSet(
 		inputPairs, SelectAllBlockPairs)
 
 	SortBlockPairsByBIndex(inputPairs)
@@ -168,13 +167,17 @@ func ExtendMatchesForward(filePair FilePair, inputPairs BlockPairs) (outputPairs
 	}
 
 	for _, oldPair := range inputPairs {
+		glog.V(1).Infof("ExtendMatchesForward considering BlockPair %v", *oldPair)
 		aIndex, bIndex := oldPair.ABeyond(), oldPair.BBeyond()
 		var newPair *BlockPair
 		for {
+			glog.V(1).Infof("ExtendMatchesForward considering indices %d and %d", aIndex, bIndex)
 			if aIndex >= filePair.ALength() || bIndex >= filePair.BLength() {
+				glog.V(1).Info("ExtendMatchesForward: beyond EOF")
 				break
 			}
 			if matchedALines.Contains(aIndex) || matchedBLines.Contains(bIndex) {
+				glog.V(1).Info("ExtendMatchesForward: line contained")
 				break
 			}
 			equal, approx, _ := filePair.CompareFileLines(aIndex, bIndex, 0)
@@ -229,7 +232,7 @@ func ExtendMatchesForward(filePair FilePair, inputPairs BlockPairs) (outputPairs
 func ExtendMatchesBackward(filePair FilePair, inputPairs BlockPairs) (outputPairs BlockPairs) {
 	matchedALines := AIndexBlockPairsToIntervalSet(
 		inputPairs, SelectAllBlockPairs)
-	matchedBLines := AIndexBlockPairsToIntervalSet(
+	matchedBLines := BIndexBlockPairsToIntervalSet(
 		inputPairs, SelectAllBlockPairs)
 
 	SortBlockPairsByBIndex(inputPairs)

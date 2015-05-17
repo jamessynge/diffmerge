@@ -124,6 +124,28 @@ func (s BlockPairs) AssignMoveId() {
 	}
 }
 
+
+
+func makeAOrderIndex(pairs []*BlockPair) (pairsByA []*BlockPair, pair2AOrder map[*BlockPair]int) {
+	pairsByA = append(pairsByA, pairs...)
+	SortBlockPairsByAIndex(pairsByA)
+	pair2AOrder = make(map[*BlockPair]int)
+	for n, pair := range pairsByA {
+		pair2AOrder[pair] = n
+	}
+	return
+}
+
+func makeBOrderIndex(pairs []*BlockPair) (pairsByB []*BlockPair, pair2BOrder map[*BlockPair]int) {
+	pairsByB = append(pairsByB, pairs...)
+	SortBlockPairsByBIndex(pairsByB)
+	pair2BOrder = make(map[*BlockPair]int)
+	for n, pair := range pairsByB {
+		pair2BOrder[pair] = n
+	}
+	return
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 type BlockPairAdjacency struct {
@@ -217,7 +239,6 @@ func BIndexBlockPairsToIntervalSet(
 
 ////////////////////////////////////////////////////////////////////////////////
 
-
 // Sort by AIndex or BIndex before calling CombineBlockPairs.
 func CombineBlockPairs(sortedInput []*BlockPair) (output []*BlockPair) {
 	if glog.V(1) {
@@ -264,9 +285,160 @@ func CombineBlockPairs(sortedInput []*BlockPair) (output []*BlockPair) {
 	return output
 }
 
+func getAGapAround(aIndex int, matchedLines IntervalSet, fileLength int) (aStart, aBeyond int) {
+	intervals, isContained := matchedLines.IntervalsAround(aIndex)
+	if isContained {
+		return aIndex, aIndex
+	}
+	if len(intervals) == 2 {
+		aStart = intervals[0].Index2
+		aBeyond = intervals[1].Index1
+		return
+	}
+	if len(intervals) == 0 {
+		// There are no matched lines in A.
+		aStart = 0
+		aBeyond = fileLength
+		return
+	}
+	if aIndex < intervals[0].Index1 {
+		return 0, intervals[0].Index1
+	}
+	return intervals[0].Index2, fileLength
+}
 
+func FillRemainingBGapsWithMismatches(filePair FilePair, inputPairs BlockPairs) (
+		outputPairs BlockPairs) {
+	SortBlockPairsByBIndex(inputPairs)
+
+	matchedALines := AIndexBlockPairsToIntervalSet(
+		inputPairs, SelectAllBlockPairs)
+
+	getAGap := func(prevBPair, thisBPair *BlockPair) (aStart, aBeyond, moveId int) {
+		aLo, aLength := 0, filePair.ALength()
+		if prevBPair != nil {
+			aLo = prevBPair.ABeyond()
+			moveId = prevBPair.MoveId
+		}
+		if 0 <= aLo && aLo < aLength {
+			aStart, aBeyond = getAGapAround(aLo, matchedALines, aLength)
+			if aStart < aBeyond {
+				return
+			}
+		}
+		aHi := aLength
+		if thisBPair != nil {
+			aHi = thisBPair.AIndex
+			moveId = thisBPair.MoveId
+		}
+		if aLo == aHi {
+			return aLo, aHi, moveId
+		}
+		aStart, aBeyond = getAGapAround(aHi-1, matchedALines, aLength)
+		return
+	}
+
+	var prevBPair *BlockPair
+	var highestBIndex int
+	for _, thisBPair := range inputPairs {
+		if highestBIndex < thisBPair.BIndex {
+			// There is a gap in B before thisBPair. Where is the gap in A?
+			aStart, aBeyond, moveId := getAGap(prevBPair, thisBPair)
+			newPair := &BlockPair{
+				AIndex: aStart,
+				ALength: MaxInt(aBeyond - aStart, 0),
+								BIndex: highestBIndex,
+				BLength: thisBPair.BIndex - highestBIndex,
+				IsMove: moveId > 0,
+				MoveId: moveId,
+			}
+			glog.Infof("FillRemainingBGapsWithMismatches created BlockPair: %v", *newPair)
+			outputPairs = append(outputPairs, newPair)
+			if newPair.ALength > 0 {
+				matchedALines.InsertInterval(newPair.AIndex, newPair.ABeyond())
+			}
+		}
+		highestBIndex = MaxInt(highestBIndex, thisBPair.BBeyond())
+		prevBPair = thisBPair
+	}
+
+	glog.Infof("FillRemainingBGapsWithMismatches filled %d gaps", len(outputPairs))
+		
+	outputPairs = append(outputPairs, inputPairs...)
+	return outputPairs
+}
 
 /*
+func FillRemainingAGapsWithMismatches(filePair FilePair, inputPairs BlockPairs) (
+		outputPairs BlockPairs) {
+	SortBlockPairsByBIndex(inputPairs)
+
+	matchedALines := AIndexBlockPairsToIntervalSet(
+		inputPairs, SelectAllBlockPairs)
+
+//	pairsByA := append(BlockPairs(nil), inputPairs...)
+//	SortBlockPairsByAIndex(pairsByA)
+//	pair2AOrder := pairsByA.MakeReverseIndex()
+
+//	handlePairs := func(prevPair, thisPair *BlockPair
+
+	getAGap := func(prevBPair, thisBPair *BlockPair) (aStart, aBeyond int) {
+		aLo, aLength := 0, filePair.ALength()
+		if prevBPair != nil {
+			aLo = prevBPair.ABeyond()
+		}
+		if 0 <= aLo && aLo < aLength {
+			aStart, aBeyond = getAGapAround(aLo)
+			if aStart < aBeyond {
+				return
+			}
+		}
+		aHi := aLength
+		if thisBPair != nil {
+			aHi = thisBPair.AIndex
+		}
+		if aLo == aHi {
+			return aLo, aHi
+		}
+		aStart, aBeyond = getAGapAround(aHi-1)
+		return
+	}
+
+	var prevBPair *BlockPair
+	var highestBIndex int
+	for thisBOrder, thisBPair := range inputPairs {
+		if highestBIndex < thisBPair.BIndex {
+			// There is a gap in B before thisBPair.  Need to find a gap in A.
+			aStart, aBeyond := getAGap(prevBPair, thisBPair)
+			
+
+
+			if 
+			
+
+
+
+
+
+
+			
+		}
+		highestBIndex = MaxInt(highestBIndex, thisBPair.BBeyond())
+		prevBPair = thisBPair
+	}
+
+		
+	outputPairs = append(outputPairs, inputPairs...)
+	
+	matchedBLines := AIndexBlockPairsToIntervalSet(
+		inputPairs, SelectAllBlockPairs)
+
+
+	return outputPairs
+}
+
+
+
 // Splits a match BlockPair if it is of mixed type (i.e. some lines are
 // exact matches, and some are only normalized matches), and combines adjacent
 // BlockPairs if they are of the the same type.

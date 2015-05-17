@@ -1117,26 +1117,6 @@ func (p *diffState) growGapByCommonLines() {
 	}
 }
 
-func makeAOrderIndex(pairs []*BlockPair) (pairsByA []*BlockPair, pair2AOrder map[*BlockPair]int) {
-	pairsByA = append(pairsByA, pairs...)
-	SortBlockPairsByAIndex(pairsByA)
-	pair2AOrder = make(map[*BlockPair]int)
-	for n, pair := range pairsByA {
-		pair2AOrder[pair] = n
-	}
-	return
-}
-
-func makeBOrderIndex(pairs []*BlockPair) (pairsByB []*BlockPair, pair2BOrder map[*BlockPair]int) {
-	pairsByB = append(pairsByB, pairs...)
-	SortBlockPairsByBIndex(pairsByB)
-	pair2BOrder = make(map[*BlockPair]int)
-	for n, pair := range pairsByB {
-		pair2BOrder[pair] = n
-	}
-	return
-}
-
 func (p *diffState) getGapBetweenAIndices(p1, p2 *BlockPair) (start, length int) {
 	if p1 == nil {
 		start = p.aFullRange.FirstIndex()

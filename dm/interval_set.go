@@ -14,6 +14,11 @@ type IntervalSet interface {
 	ContainsSome(begin, beyond int) bool
 	ContainsAll(begin, beyond int) bool
 	Contains(position int) bool
+
+	// If position is in an interval, returns that interval. If position is
+	// between two intervals, returns those two; if beyond last interval, returns
+	// the last interval; if before first interval, returns the first interval.
+	IntervalsAround(position int) (result []IndexPair, isContained bool)
 }
 
 func MakeIntervalSet() IntervalSet {
@@ -127,4 +132,31 @@ func (p *intervalSet) Contains(position int) bool {
 	index := p.searchForBegin(position)
 	if index >= len(p.s) { return false }
 	return p.s[index].Index1 <= position && position < p.s[index].Index2
+}
+
+func (p *intervalSet) IntervalsAround(position int) (result []IndexPair, isContained bool) {
+	length := len(p.s)
+	if length == 0 { return }
+	lastIndex := length - 1
+	index := p.searchForBegin(position)
+	if index >= lastIndex {
+		result = append(result, p.s[lastIndex])
+		return
+	}
+	if p.s[index].Index1 <= position {
+		// By definition of searchForBegin, position <= p.s[index].Index2.
+		result = append(result, p.s[index])
+		if position == p.s[index].Index2 {
+			result = append(result, p.s[index+1])
+		} else {
+			isContained = true
+		}
+		return
+	}
+	// position < p.s[index].Index1.
+	if index > 0 {
+		result = append(result, p.s[index-1])
+	}
+	result = append(result, p.s[index])
+	return
 }

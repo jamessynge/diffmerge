@@ -59,11 +59,24 @@ var DefaultSideBySideConfig = SideBySideConfig{
 	WrapLongLines:      true,
 	SpacesPerTab:       8,
 	ContextLines:       3,
+	ZeroBasedLineNumbers: false,
 }
 
 func init() {
-	flag.IntVar(&DefaultSideBySideConfig.ContextLines, "context", 3,
+	flag.IntVar(
+		&DefaultSideBySideConfig.DisplayColumns, "output-columns",
+		DefaultSideBySideConfig.DisplayColumns,
+		"Number of columns in side-by-side display")
+
+	flag.IntVar(
+		&DefaultSideBySideConfig.ContextLines, "context",
+		DefaultSideBySideConfig.ContextLines,
 		"Number of lines of context (unchanged lines) to show adjacent to a change")
+
+	flag.BoolVar(
+		&DefaultSideBySideConfig.ZeroBasedLineNumbers, "sxs-zero",
+		DefaultSideBySideConfig.ZeroBasedLineNumbers,
+		"Start at line number zero (default is starting at line number one).")
 }
 
 // TODO Measure width of longest line in each file so that we can decide to
@@ -356,7 +369,17 @@ func FormatSideBySideToString(aFile, bFile *File, pairs []*BlockPair,
 func glogSideBySide(aFile, bFile *File, pairs []*BlockPair, aIsPrimary bool,
 	optionalConfig *SideBySideConfig) {
 	if optionalConfig == nil {
-		optionalConfig = &DefaultSideBySideConfig
+		optionalConfig = &SideBySideConfig{
+			DisplayColumns:     128,
+			DisplayLineNumbers: true,
+			WrapLongLines:      true,
+			SpacesPerTab:       2,
+			ContextLines:       0,
+			ZeroBasedLineNumbers: true,
+		}
+		if DefaultSideBySideConfig.DisplayColumns > optionalConfig.DisplayColumns {
+			optionalConfig.DisplayColumns = DefaultSideBySideConfig.DisplayColumns
+		}
 	}
 	// Maybe split if glog can't take too large a string?
 	s := FormatSideBySideToString(aFile, bFile, pairs, aIsPrimary, *optionalConfig)
