@@ -73,6 +73,7 @@
 package main
 
 import (
+	"fmt"
 	"flag"
 	"os"
 	"path/filepath"
@@ -111,6 +112,29 @@ const (
 	SomeConflicts
 	AnError
 )
+
+type cmdState struct {
+	readingStdin bool
+	fileNames []string
+	files []*dm.File
+}
+
+func (p *cmdState) AddInputFile(fileName string) {
+	if fileName == "-" {
+		if p.readingStdin {
+			fmt.Fprintln(os.Stderr, "Only one input file maybe '-' (for standard input).")
+			os.Exit(int(AnError) & 0xff)
+		}
+		p.readingStdin = true
+	}
+	file, err := dm.ReadFile(fileName)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Failed to read file %s: %s", fileName, err)
+		os.Exit(int(AnError) & 0xff)
+	}
+	p.fileNames = append(p.fileNames, fileName)
+	p.files = append(p.files, file)
+}
 
 func Diff3Files(yours, origin, theirs *dm.File) CmdStatus {
 	return AnError

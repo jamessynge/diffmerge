@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"path"
+	"os"
 
 	"github.com/golang/glog"
 )
@@ -132,8 +133,19 @@ func countLeadingWhitespace(lineBytes []byte) (tabCount, spaceCount uint8) {
 	return uint8(MinInt(numTabs, 255)), uint8(MinInt(numSpaces, 255))
 }
 
+func readFileBody(name string) (fn string, body []byte, err error) {
+	if name == "-" {
+		fn = "standard input"
+		body, err = ioutil.ReadAll(os.Stdin)
+	} else {
+		fn = name
+		body, err = ioutil.ReadFile(name)
+	}
+	return
+}
+
 func ReadFile(name string) (*File, error) {
-	body, err := ioutil.ReadFile(name)
+	name, body, err := readFileBody(name)
 	if err != nil {
 		glog.Infof("Failed to read file %s: %s", name, err)
 		return nil, err
@@ -192,6 +204,9 @@ func ReadFile(name string) (*File, error) {
 			lp.CountInFile = uint8(count)
 		}
 	}
+
+	glog.Infof("File %s contains %d lines, %d of which are unique",
+		name, len(p.Lines), len(counts))
 
 	p.FullRange = p.MakeSubRange(0, p.LineCount())
 	return p, nil
