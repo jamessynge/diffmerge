@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"path"
 	"os"
+	"path"
 
 	"github.com/golang/glog"
 )

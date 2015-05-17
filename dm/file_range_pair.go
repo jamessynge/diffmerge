@@ -349,20 +349,20 @@ func MatchingRangePairOffsetsToBlockPairs(
 func glogFileRangePairSideBySide(frp FileRangePair, optionalConfig *SideBySideConfig) {
 	aRange, bRange := frp.ARange(), frp.BRange()
 	mismatch := &BlockPair{
-		AIndex: aRange.FirstIndex(),
+		AIndex:  aRange.FirstIndex(),
 		ALength: aRange.Length(),
-		BIndex: bRange.FirstIndex(),
+		BIndex:  bRange.FirstIndex(),
 		BLength: bRange.Length(),
 	}
 	pairs := BlockPairs{mismatch}
 
 	if optionalConfig == nil {
 		optionalConfig = &SideBySideConfig{
-			DisplayColumns:     128,
-			DisplayLineNumbers: true,
-			WrapLongLines:      true,
-			SpacesPerTab:       2,
-			ContextLines:       0,
+			DisplayColumns:       128,
+			DisplayLineNumbers:   true,
+			WrapLongLines:        true,
+			SpacesPerTab:         2,
+			ContextLines:         0,
 			ZeroBasedLineNumbers: true,
 		}
 	}

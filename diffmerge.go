@@ -73,8 +73,8 @@
 package main
 
 import (
-	"fmt"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -115,8 +115,8 @@ const (
 
 type cmdState struct {
 	readingStdin bool
-	fileNames []string
-	files []*dm.File
+	fileNames    []string
+	files        []*dm.File
 }
 
 func (p *cmdState) AddInputFile(fileName string) {
@@ -159,9 +159,9 @@ func main() {
 		pairs := dm.PerformDiff2(fromFile, toFile, *diffConfig)
 		if len(pairs) == 0 {
 			pairs = append(pairs, &dm.BlockPair{
-				AIndex: 0,
+				AIndex:  0,
 				ALength: fromFile.LineCount(),
-				BIndex: 0,
+				BIndex:  0,
 				BLength: toFile.LineCount(),
 				IsMatch: true,
 			})

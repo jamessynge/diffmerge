@@ -130,13 +130,17 @@ func (p *intervalSet) ContainsAll(begin, beyond int) bool {
 
 func (p *intervalSet) Contains(position int) bool {
 	index := p.searchForBegin(position)
-	if index >= len(p.s) { return false }
+	if index >= len(p.s) {
+		return false
+	}
 	return p.s[index].Index1 <= position && position < p.s[index].Index2
 }
 
 func (p *intervalSet) IntervalsAround(position int) (result []IndexPair, isContained bool) {
 	length := len(p.s)
-	if length == 0 { return }
+	if length == 0 {
+		return
+	}
 	lastIndex := length - 1
 	index := p.searchForBegin(position)
 	if index >= lastIndex {

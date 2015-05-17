@@ -66,7 +66,7 @@ func BlockPairsLess(p, o *BlockPair) bool {
 
 func BlockPairsAreSameType(p, o *BlockPair) bool {
 	return (p.IsMatch == o.IsMatch && p.IsNormalizedMatch == o.IsNormalizedMatch &&
-	 	p.IsMove == o.IsMove && p.MoveId == o.MoveId)
+		p.IsMove == o.IsMove && p.MoveId == o.MoveId)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -123,8 +123,6 @@ func (s BlockPairs) AssignMoveId() {
 		pair.MoveId = lastMoveId
 	}
 }
-
-
 
 func makeAOrderIndex(pairs []*BlockPair) (pairsByA []*BlockPair, pair2AOrder map[*BlockPair]int) {
 	pairsByA = append(pairsByA, pairs...)
@@ -308,7 +306,7 @@ func getAGapAround(aIndex int, matchedLines IntervalSet, fileLength int) (aStart
 }
 
 func FillRemainingBGapsWithMismatches(filePair FilePair, inputPairs BlockPairs) (
-		outputPairs BlockPairs) {
+	outputPairs BlockPairs) {
 	SortBlockPairsByBIndex(inputPairs)
 
 	matchedALines := AIndexBlockPairsToIntervalSet(
@@ -345,12 +343,12 @@ func FillRemainingBGapsWithMismatches(filePair FilePair, inputPairs BlockPairs) 
 			// There is a gap in B before thisBPair. Where is the gap in A?
 			aStart, aBeyond, moveId := getAGap(prevBPair, thisBPair)
 			newPair := &BlockPair{
-				AIndex: aStart,
-				ALength: MaxInt(aBeyond - aStart, 0),
-								BIndex: highestBIndex,
+				AIndex:  aStart,
+				ALength: MaxInt(aBeyond-aStart, 0),
+				BIndex:  highestBIndex,
 				BLength: thisBPair.BIndex - highestBIndex,
-				IsMove: moveId > 0,
-				MoveId: moveId,
+				IsMove:  moveId > 0,
+				MoveId:  moveId,
 			}
 			glog.Infof("FillRemainingBGapsWithMismatches created BlockPair: %v", *newPair)
 			outputPairs = append(outputPairs, newPair)
@@ -363,7 +361,7 @@ func FillRemainingBGapsWithMismatches(filePair FilePair, inputPairs BlockPairs) 
 	}
 
 	glog.Infof("FillRemainingBGapsWithMismatches filled %d gaps", len(outputPairs))
-		
+
 	outputPairs = append(outputPairs, inputPairs...)
 	return outputPairs
 }
@@ -410,26 +408,26 @@ func FillRemainingAGapsWithMismatches(filePair FilePair, inputPairs BlockPairs) 
 		if highestBIndex < thisBPair.BIndex {
 			// There is a gap in B before thisBPair.  Need to find a gap in A.
 			aStart, aBeyond := getAGap(prevBPair, thisBPair)
-			
 
 
-			if 
-			
 
-
+			if
 
 
 
 
-			
+
+
+
+
 		}
 		highestBIndex = MaxInt(highestBIndex, thisBPair.BBeyond())
 		prevBPair = thisBPair
 	}
 
-		
+
 	outputPairs = append(outputPairs, inputPairs...)
-	
+
 	matchedBLines := AIndexBlockPairsToIntervalSet(
 		inputPairs, SelectAllBlockPairs)
 
@@ -453,7 +451,7 @@ func NormalizeBlockPairs(sortedInput BlockPairs, matchedNormalizedLines bool) (o
 
 	var prevPair *BlockPair
 	for _, thisPair := range sortedInput {
-		if thisPair.IsNormalizedMatch && (matchedNormalizedLines ||  
+		if thisPair.IsNormalizedMatch && (matchedNormalizedLines ||
 
 		if matchedNormalizedLines
 
@@ -510,6 +508,3 @@ func NormalizeBlockPairs(sortedInput BlockPairs, matchedNormalizedLines bool) (o
 }
 
 */
-
-
-

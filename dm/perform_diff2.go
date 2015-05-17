@@ -123,10 +123,8 @@ func PerformDiff2(aFile, bFile *File, config DifferencerConfig) (pairs []*BlockP
 	allMatches = ExtendMatchesForward(filePair, allMatches)
 	allMatches = ExtendMatchesBackward(filePair, allMatches)
 
-
 	// TODO Split mixed matches.
-	
-	
+
 	// Combine matches.
 	SortBlockPairsByBIndex(allMatches)
 	allMatches = CombineBlockPairs(allMatches)
@@ -240,7 +238,9 @@ func ExtendMatchesBackward(filePair FilePair, inputPairs BlockPairs) (outputPair
 		aIndex, bIndex := oldPair.AIndex, oldPair.BIndex
 		var newPair *BlockPair
 		for {
-			if aIndex <= 0 || bIndex <= 0 { break }
+			if aIndex <= 0 || bIndex <= 0 {
+				break
+			}
 			aIndex--
 			bIndex--
 			if matchedALines.Contains(aIndex) || matchedBLines.Contains(bIndex) {
@@ -289,7 +289,3 @@ func ExtendMatchesBackward(filePair FilePair, inputPairs BlockPairs) (outputPair
 
 	return outputPairs
 }
-
-
-
-

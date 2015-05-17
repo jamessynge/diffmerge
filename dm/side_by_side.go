@@ -54,11 +54,11 @@ type SideBySideConfig struct {
 }
 
 var DefaultSideBySideConfig = SideBySideConfig{
-	DisplayColumns:     80,
-	DisplayLineNumbers: true,
-	WrapLongLines:      true,
-	SpacesPerTab:       8,
-	ContextLines:       3,
+	DisplayColumns:       80,
+	DisplayLineNumbers:   true,
+	WrapLongLines:        true,
+	SpacesPerTab:         8,
+	ContextLines:         3,
 	ZeroBasedLineNumbers: false,
 }
 
@@ -101,7 +101,7 @@ type sideBySideState struct {
 	lineBuffer *bytes.Buffer
 	w          io.Writer
 
-	lineFormat string
+	lineFormat       string
 	lineNumberOffset int
 }
 
@@ -112,8 +112,8 @@ func (state *sideBySideState) initialize() {
 	if state.cfg.DisplayLineNumbers {
 		aMax, bMax := state.aFile.LineCount(), state.bFile.LineCount()
 		if state.cfg.ZeroBasedLineNumbers {
-			aMax = MaxInt(0, aMax - 1)
-			bMax = MaxInt(0, bMax - 1)
+			aMax = MaxInt(0, aMax-1)
+			bMax = MaxInt(0, bMax-1)
 			state.lineNumberOffset = 0
 		} else {
 			state.lineNumberOffset = 1
@@ -261,8 +261,6 @@ func (state *sideBySideState) outputABLines(aIndex, bIndex int, code string) {
 	glog.V(2).Infof("outputABLines: %d, %d, %s;  #aBufs %d; #bBufs %d; limit %d",
 		aIndex, bIndex, code, len(aBufs), len(bBufs), limit)
 
-
-
 	for n := 0; n < limit; n++ {
 		aBuf := selectOutputBuf(aBufs, n, state.aOutputColumns)
 		bBuf := selectOutputBuf(bBufs, n, state.bOutputColumns)
@@ -360,7 +358,7 @@ func FormatSideBySide(aFile, bFile *File, pairs []*BlockPair, aIsPrimary bool,
 }
 
 func FormatSideBySideToString(aFile, bFile *File, pairs []*BlockPair,
-															aIsPrimary bool, config SideBySideConfig) string {
+	aIsPrimary bool, config SideBySideConfig) string {
 	var buf bytes.Buffer
 	FormatSideBySide(aFile, bFile, pairs, aIsPrimary, &buf, config)
 	return buf.String()
@@ -370,11 +368,11 @@ func glogSideBySide(aFile, bFile *File, pairs []*BlockPair, aIsPrimary bool,
 	optionalConfig *SideBySideConfig) {
 	if optionalConfig == nil {
 		optionalConfig = &SideBySideConfig{
-			DisplayColumns:     128,
-			DisplayLineNumbers: true,
-			WrapLongLines:      true,
-			SpacesPerTab:       2,
-			ContextLines:       0,
+			DisplayColumns:       128,
+			DisplayLineNumbers:   true,
+			WrapLongLines:        true,
+			SpacesPerTab:         2,
+			ContextLines:         0,
 			ZeroBasedLineNumbers: true,
 		}
 		if DefaultSideBySideConfig.DisplayColumns > optionalConfig.DisplayColumns {
