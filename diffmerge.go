@@ -73,13 +73,13 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
-	"os"
-	"path/filepath"
 	"io"
 	"io/ioutil"
-	"bytes"
+	"os"
+	"path/filepath"
 
 	"github.com/golang/glog"
 
@@ -103,11 +103,12 @@ var (
 // for an example of how to do this.
 
 type CmdStatus int
+
 const (
 	ConflictFree CmdStatus = iota
 	SomeConflicts
 	AnError
-	NoDifferences = ConflictFree
+	NoDifferences   = ConflictFree
 	SomeDifferences = SomeConflicts
 )
 
@@ -125,7 +126,7 @@ type cmdInputs struct {
 	readingStdin bool
 	fileNames    []string
 	files        []*dm.File
-	perm os.FileMode
+	perm         os.FileMode
 
 	// Output used for merge with 3 inputs and one output.
 	outputFileName string
@@ -207,18 +208,17 @@ func (p *cmdInputs) PerformMerge() CmdStatus {
 		// No changes in your file, so there can be no conflicts; output their file.
 		p.outputFile(theirs)
 		return ConflictFree
-	} else if b2tStatus == NoDifferences  && len(b2tPairs) == 1 {
+	} else if b2tStatus == NoDifferences && len(b2tPairs) == 1 {
 		// No changes in their file, so there can be no conflicts; output your file.
 		p.outputFile(yours)
 		return ConflictFree
 	}
 
-	// Determine if there are conflicts.
-
-
-
-
-
+	// Determine if there are possible conflicts. If so, then maybe do a diff of
+	// yours vs. theirs, which may help eliminate the diff.
+	// Start by sorting on the same index, base.
+	dm.SortBlockPairsByAIndex(b2yPairs)
+	dm.SortBlockPairsByAIndex(b2tPairs)
 
 	return AnError // TODO Replace with correct value.
 }
