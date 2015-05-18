@@ -77,6 +77,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"io"
+	"io/ioutil"
+	"bytes"
 
 	"github.com/golang/glog"
 
@@ -95,52 +98,129 @@ var (
 		"side-by-side", true, "For diff of two files, display results side-by-side.")
 )
 
-func ReadFileOrDie(name string) *dm.File {
-	// TODO Support 1 file named "-", which means read from stdin.
-	f, err := dm.ReadFile(name)
-	if err != nil {
-		glog.Fatalf("Failed to read file %s: %s", name, err)
-	}
-	glog.Infof("Loaded %d lines from %s", len(f.Lines), f.Name)
-	return f
-}
+// TODO Add support for merge(1)'s -L (label) flag, which can appear up to
+// 3 times in the command line args. See https://play.golang.org/p/Ig5sm7jA14
+// for an example of how to do this.
 
 type CmdStatus int
-
 const (
 	ConflictFree CmdStatus = iota
 	SomeConflicts
 	AnError
+	NoDifferences = ConflictFree
+	SomeDifferences = SomeConflicts
 )
 
-type cmdState struct {
+func FailWithMessage(showUsage bool, format string, a ...interface{}) {
+	msg := fmt.Sprintf(format, a...)
+	glog.Error(msg)
+	fmt.Fprintln(os.Stderr, msg)
+	if showUsage {
+		flag.Usage()
+	}
+	os.Exit(int(AnError) & 0xff)
+}
+
+type cmdInputs struct {
 	readingStdin bool
 	fileNames    []string
 	files        []*dm.File
+	perm os.FileMode
+
+	// Output used for merge with 3 inputs and one output.
+	outputFileName string
+
+	diffConfig dm.DifferencerConfig
 }
 
-func (p *cmdState) AddInputFile(fileName string) {
+func (p *cmdInputs) AddInputFile(fileName string) {
 	if fileName == "-" {
 		if p.readingStdin {
-			fmt.Fprintln(os.Stderr, "Only one input file maybe '-' (for standard input).")
-			os.Exit(int(AnError) & 0xff)
+			FailWithMessage(false, "Only one input file maybe '-' (for standard input).")
 		}
 		p.readingStdin = true
 	}
 	file, err := dm.ReadFile(fileName)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Failed to read file %s: %s", fileName, err)
+		FailWithMessage(false, "Failed to read file %s: %s", fileName, err)
 		os.Exit(int(AnError) & 0xff)
 	}
 	p.fileNames = append(p.fileNames, fileName)
 	p.files = append(p.files, file)
+	if p.perm == 0 && fileName != "-" {
+		fi, err := os.Stat(fileName)
+		if err == nil {
+			p.perm = fi.Mode().Perm()
+		}
+	}
 }
 
-func Diff3Files(yours, origin, theirs *dm.File) CmdStatus {
+func (p *cmdInputs) diff2Files(fromFile, toFile *dm.File) (pairs dm.BlockPairs, status CmdStatus) {
+	pairs = dm.PerformDiff2(fromFile, toFile, p.diffConfig)
+	glog.Flush()
+	if len(pairs) == 1 && pairs[0].IsMatch {
+		status = NoDifferences
+	} else {
+		status = SomeDifferences
+	}
+	return
+}
+
+func (p *cmdInputs) outputFile(f *dm.File) {
+	if p.outputFileName != "" {
+		err := ioutil.WriteFile(p.outputFileName, f.Body, p.perm)
+		if err != nil {
+			FailWithMessage(false, "Failed writing to %s; error: %s", p.outputFileName, err)
+		}
+	} else {
+		r := bytes.NewReader(f.Body)
+		_, err := io.Copy(os.Stdout, r)
+		if err != nil {
+			FailWithMessage(false, "Failed writing to stdout; error: %s", err)
+		}
+	}
+}
+
+func (p *cmdInputs) PerformDiff2() CmdStatus {
+	fromFile, toFile := p.files[0], p.files[1]
+	pairs, status := p.diff2Files(fromFile, toFile)
+	if *pSideBySideFlag {
+		dm.FormatSideBySide(fromFile, toFile, pairs, false, os.Stdout, dm.DefaultSideBySideConfig)
+	} else {
+		dm.FormatInterleaved(pairs, false, fromFile, toFile, os.Stdout, true)
+	}
+	return status
+}
+
+func (p *cmdInputs) PerformDiff3() CmdStatus {
 	return AnError
 }
-func Merge3Files(yours, origin, theirs *dm.File) CmdStatus {
-	return AnError
+
+func (p *cmdInputs) PerformMerge() CmdStatus {
+	yours, base, theirs := p.files[0], p.files[1], p.files[2]
+	b2yPairs, b2yStatus := p.diff2Files(base, yours)
+	b2tPairs, b2tStatus := p.diff2Files(base, theirs)
+
+	// len(.) == 1 expression included temporarily to supporess complaints about
+	// unused vars.  TODO Remove.
+	if b2yStatus == NoDifferences && len(b2yPairs) == 1 {
+		// No changes in your file, so there can be no conflicts; output their file.
+		p.outputFile(theirs)
+		return ConflictFree
+	} else if b2tStatus == NoDifferences  && len(b2tPairs) == 1 {
+		// No changes in their file, so there can be no conflicts; output your file.
+		p.outputFile(yours)
+		return ConflictFree
+	}
+
+	// Determine if there are conflicts.
+
+
+
+
+
+
+	return AnError // TODO Replace with correct value.
 }
 
 func main() {
@@ -151,50 +231,28 @@ func main() {
 	cmd := filepath.Base(os.Args[0])
 	glog.V(1).Infoln("cmd =", cmd)
 
+	nArgs := flag.NArg()
+	if !(2 <= nArgs && nArgs <= 4) {
+		FailWithMessage(true, "Wrong number of file arguments")
+	}
+	var ci cmdInputs
+	ci.diffConfig = *diffConfig
+	ci.AddInputFile(flag.Arg(0))
+	ci.AddInputFile(flag.Arg(1))
+	if nArgs > 2 {
+		ci.AddInputFile(flag.Arg(2))
+		if nArgs > 3 {
+			ci.outputFileName = flag.Arg(3)
+		}
+	}
+
 	var status CmdStatus
-	switch flag.NArg() {
-	case 2:
-		fromFile := ReadFileOrDie(flag.Arg(0))
-		toFile := ReadFileOrDie(flag.Arg(1))
-		pairs := dm.PerformDiff2(fromFile, toFile, *diffConfig)
-		if len(pairs) == 0 {
-			pairs = append(pairs, &dm.BlockPair{
-				AIndex:  0,
-				ALength: fromFile.LineCount(),
-				BIndex:  0,
-				BLength: toFile.LineCount(),
-				IsMatch: true,
-			})
-		}
-		if len(pairs) == 1 && pairs[0].IsMatch {
-			status = ConflictFree
-		} else {
-			status = SomeConflicts
-		}
-
-		glog.Flush()
-
-		if *pSideBySideFlag {
-			sxsCfg := dm.DefaultSideBySideConfig
-			dm.FormatSideBySide(fromFile, toFile, pairs, false, os.Stdout, sxsCfg)
-		} else {
-			dm.FormatInterleaved(pairs, false, fromFile, toFile, os.Stdout, true)
-		}
-
-	case 3:
-		yours := ReadFileOrDie(flag.Arg(0))
-		origin := ReadFileOrDie(flag.Arg(1))
-		theirs := ReadFileOrDie(flag.Arg(2))
-		if *pDiff3Flag {
-			status = Diff3Files(yours, origin, theirs)
-		} else {
-			status = Merge3Files(yours, origin, theirs)
-		}
-
-	default:
-		glog.Errorf("Command requires 2 or 3 arguments, not %d", flag.NArg())
-		flag.Usage()
-		status = AnError
+	if nArgs == 2 {
+		status = ci.PerformDiff2()
+	} else if *pDiff3Flag {
+		status = ci.PerformDiff3()
+	} else {
+		status = ci.PerformMerge()
 	}
 
 	os.Exit(int(status) & 0xff)
