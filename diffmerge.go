@@ -156,7 +156,8 @@ func (p *cmdInputs) AddInputFile(fileName string) {
 	}
 }
 
-func (p *cmdInputs) diff2Files(fromFile, toFile *dm.File) (pairs dm.BlockPairs, status CmdStatus) {
+func (p *cmdInputs) diff2Files(
+	fromFile, toFile *dm.File) (pairs dm.BlockPairs, status CmdStatus) {
 	pairs = dm.PerformDiff2(fromFile, toFile, p.diffConfig)
 	glog.Flush()
 	if len(pairs) == 1 && pairs[0].IsMatch {
@@ -165,6 +166,18 @@ func (p *cmdInputs) diff2Files(fromFile, toFile *dm.File) (pairs dm.BlockPairs, 
 		status = SomeDifferences
 	}
 	return
+}
+
+func (p *cmdInputs) diff3Files() *diff3State {
+	d3s := &diff3State{
+		ci: p,
+		yours: p.files[0],
+		base: p.files[1],
+		theirs: p.files[2],
+	}
+	d3s.b2yPairs, d3s.b2yStatus = p.diff2Files(d3s.base, d3s.yours)
+	d3s.b2tPairs, d3s.b2tStatus = p.diff2Files(d3s.base, d3s.theirs)
+	return d3s
 }
 
 func (p *cmdInputs) outputFile(f *dm.File) {
@@ -194,6 +207,20 @@ func (p *cmdInputs) PerformDiff2() CmdStatus {
 }
 
 func (p *cmdInputs) PerformDiff3() CmdStatus {
+	d3s := p.diff3Files()
+	outputFile := d3s.noConflictPossibleOutputFile()
+	if outputFile != nil {
+		p.outputFile(outputFile)
+		return ConflictFree
+	}
+	d3s.diff3Triples, d3s.conflictsExist = dm.PerformDiff3(
+		d3s.yours, d3s.base, d3s.theirs,
+		d3s.b2yPairs, d3s.b2tPairs, p.diffConfig)
+
+
+
+
+
 	return AnError
 }
 
@@ -217,10 +244,29 @@ func (p *cmdInputs) PerformMerge() CmdStatus {
 	// Determine if there are possible conflicts. If so, then maybe do a diff of
 	// yours vs. theirs, which may help eliminate the diff.
 	// Start by sorting on the same index, base.
-	dm.SortBlockPairsByAIndex(b2yPairs)
-	dm.SortBlockPairsByAIndex(b2tPairs)
 
 	return AnError // TODO Replace with correct value.
+}
+
+type diff3State struct {
+	ci *cmdInputs
+	yours, base, theirs *dm.File
+	b2yPairs, b2tPairs dm.BlockPairs
+	b2yStatus, b2tStatus CmdStatus
+	diff3Triples dm.Diff3Triples
+	conflictsExist bool
+}
+
+// IFF at most one file is changed, return the other file that can be output.
+func (p *diff3State) noConflictPossibleOutputFile() *dm.File {
+	if p.b2yStatus == NoDifferences {
+		// No changes in file p.yours, so there can be no conflicts.
+		return p.theirs
+	} else if p.b2tStatus == NoDifferences {
+		// No changes in file p.theirs, so there can be no conflicts.
+		return p.yours
+	}
+	return nil
 }
 
 func main() {
