@@ -1,8 +1,6 @@
 package dm
 
-import (
-
-)
+import ()
 
 // Given 3 files where both yours and theirs are different from base, compute a
 // 3-way diff, analogous to diff3. The goal is to identify those blocks that
@@ -16,11 +14,11 @@ func PerformDiff3(
 	SortBlockPairsByAIndex(b2yPairs)
 	SortBlockPairsByAIndex(b2tPairs)
 
-	
 	return
 }
 
 type Diff3TripleType int
+
 const (
 	UnchangedTriple Diff3TripleType = iota
 	YoursChangedTriple
@@ -28,6 +26,7 @@ const (
 	BothSameTriple
 	ConflictTriple
 )
+
 type Diff3Triple struct {
 	TripleType Diff3TripleType
 
@@ -38,6 +37,3 @@ type Diff3Triple struct {
 	B2YPair, B2TPair *BlockPair
 }
 type Diff3Triples []*Diff3Triple
-
-
-

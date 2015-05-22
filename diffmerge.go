@@ -170,9 +170,9 @@ func (p *cmdInputs) diff2Files(
 
 func (p *cmdInputs) diff3Files() *diff3State {
 	d3s := &diff3State{
-		ci: p,
-		yours: p.files[0],
-		base: p.files[1],
+		ci:     p,
+		yours:  p.files[0],
+		base:   p.files[1],
 		theirs: p.files[2],
 	}
 	d3s.b2yPairs, d3s.b2yStatus = p.diff2Files(d3s.base, d3s.yours)
@@ -199,7 +199,9 @@ func (p *cmdInputs) PerformDiff2() CmdStatus {
 	fromFile, toFile := p.files[0], p.files[1]
 	pairs, status := p.diff2Files(fromFile, toFile)
 	if *pSideBySideFlag {
-		dm.FormatSideBySide(fromFile, toFile, pairs, false, os.Stdout, dm.DefaultSideBySideConfig)
+		dm.FormatSideBySide(
+			fromFile, toFile, pairs, false,
+			os.Stdout, dm.DefaultSideBySideConfig)
 	} else {
 		dm.FormatInterleaved(pairs, false, fromFile, toFile, os.Stdout, true)
 	}
@@ -213,18 +215,17 @@ func (p *cmdInputs) PerformDiff3() CmdStatus {
 		p.outputFile(outputFile)
 		return ConflictFree
 	}
-	d3s.diff3Triples, d3s.conflictsExist = dm.PerformDiff3(
-		d3s.yours, d3s.base, d3s.theirs,
-		d3s.b2yPairs, d3s.b2tPairs, p.diffConfig)
-
-
-
-
-
+	d3s.performDiff3()
 	return AnError
 }
 
 func (p *cmdInputs) PerformMerge() CmdStatus {
+	d3s := p.diff3Files()
+	outputFile := d3s.noConflictPossibleOutputFile()
+	if outputFile != nil {
+		p.outputFile(outputFile)
+		return ConflictFree
+	}
 	yours, base, theirs := p.files[0], p.files[1], p.files[2]
 	b2yPairs, b2yStatus := p.diff2Files(base, yours)
 	b2tPairs, b2tStatus := p.diff2Files(base, theirs)
@@ -249,12 +250,12 @@ func (p *cmdInputs) PerformMerge() CmdStatus {
 }
 
 type diff3State struct {
-	ci *cmdInputs
-	yours, base, theirs *dm.File
-	b2yPairs, b2tPairs dm.BlockPairs
-	b2yStatus, b2tStatus CmdStatus
-	diff3Triples dm.Diff3Triples
-	conflictsExist bool
+	ci                              *cmdInputs
+	yours, base, theirs             *dm.File
+	b2yPairs, b2tPairs, y2tPairs    dm.BlockPairs
+	b2yStatus, b2tStatus, y2tStatus CmdStatus
+	diff3Triples                    dm.Diff3Triples
+	conflictsExist                  bool
 }
 
 // IFF at most one file is changed, return the other file that can be output.
@@ -267,6 +268,11 @@ func (p *diff3State) noConflictPossibleOutputFile() *dm.File {
 		return p.yours
 	}
 	return nil
+}
+
+func (p *diff3State) performDiff3() {
+	p.diff3Triples, p.conflictsExist = dm.PerformDiff3(
+		p.yours, p.base, p.theirs, p.b2yPairs, p.b2tPairs, p.ci.diffConfig)
 }
 
 func main() {
