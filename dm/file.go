@@ -34,7 +34,7 @@ func (p *File) GetFullRange() FileRange {
 }
 
 func (p *File) MakeSubRange(start, length int) FileRange {
-	glog.V(1).Infof("File.MakeSubRange [%d, %d)", start, start+length)
+	glog.V(2).Infof("File.MakeSubRange [%d, %d)", start, start+length)
 	lc := p.LineCount()
 	if !(0 <= start && start+length <= lc && length >= 0) {
 		glog.Fatalf("New range [%d, %d) is invalid (max length %d)",
@@ -44,7 +44,7 @@ func (p *File) MakeSubRange(start, length int) FileRange {
 	if p.FileRanges == nil {
 		p.FileRanges = make(map[IndexPair]FileRange)
 	} else if fr, ok := p.FileRanges[key]; ok {
-		glog.V(1).Infof("File.MakeSubRange reusing existing FileRange")
+		glog.V(2).Infof("File.MakeSubRange reusing existing FileRange")
 		return fr
 	}
 	fr := &fileRange{

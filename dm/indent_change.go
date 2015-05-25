@@ -31,6 +31,8 @@ import ()
 // spaces).
 
 type LeadingWhitespaceStatistics struct {
+	NumFilesAdded uint64
+	NumValidLines uint64
 	NumInvalidLines uint64
 	NumLeadingTabs            map[uint8]int
 	NumLeadingSpaces          map[uint8]int
@@ -47,6 +49,7 @@ func makeCounterMap(m *map[uint8]int) {
 }
 
 func (stats *LeadingWhitespaceStatistics) AddFile(file *File) {
+	stats.NumFilesAdded++
 	makeCounterMap(&stats.NumLeadingTabs)
 	makeCounterMap(&stats.NumLeadingSpaces)
 	makeCounterMap(&stats.NumLeadingSpacesAfterTab)
@@ -57,6 +60,7 @@ func (stats *LeadingWhitespaceStatistics) AddFile(file *File) {
 			stats.NumInvalidLines++
 			continue
 		}
+		stats.NumValidLines++
 		leadingTabs, leadingSpaces := lp.LeadingTabs, lp.LeadingSpaces
 		stats.NumLeadingTabs[leadingTabs]++
 		stats.NumLeadingSpaces[leadingSpaces]++
