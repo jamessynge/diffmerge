@@ -74,11 +74,11 @@ func (p *frpImpl) MakeSubRangePair(aOffset, aLength, bOffset, bLength int) FileR
 
 func (p *frpImpl) BriefDebugString() string {
 	var aStart, aBeyond, bStart, bBeyond int
-	if p.ARange != nil {
+	if p.aRange != nil {
 		aStart = p.aRange.FirstIndex()
 		aBeyond = p.aRange.Length() + aStart
 	}
-	if p.BRange != nil {
+	if p.bRange != nil {
 		bStart = p.bRange.FirstIndex()
 		bBeyond = p.bRange.Length() + bStart
 	}
